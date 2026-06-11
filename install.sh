@@ -104,10 +104,10 @@ SETTINGS="$HOME/.claude/settings.json"
 say "hooks: merging into ${SETTINGS}"
 if [ "$DRY_RUN" -eq 0 ]; then
   [ -f "$SETTINGS" ] && cp "$SETTINGS" "${SETTINGS}.bak.$(date +%Y%m%d%H%M%S)"
-  python3 - "$SETTINGS" "$REPO_DIR" "$HOME/.claude/memoria-curator-prompt.md" <<'PYEOF'
+  python3 - "$SETTINGS" "$REPO_DIR" "$HOME/.claude/memoria-curator-prompt.md" "$MEMORIA_VAULT_ROOT" <<'PYEOF'
 import json, os, sys
 
-settings_path, repo_dir, curator_path = sys.argv[1], sys.argv[2], sys.argv[3]
+settings_path, repo_dir, curator_path, vault_root = sys.argv[1:5]
 
 settings = {}
 if os.path.exists(settings_path):
@@ -143,6 +143,15 @@ stop.append({"hooks": [
     {"type": "agent", "prompt": curator_prompt, "timeout": 120},
 ]})
 hooks["Stop"] = stop
+
+# Vault permissions so the Stop-hook curator agent can write memory
+# without a human to approve (headless context).
+allow = settings.setdefault("permissions", {}).setdefault("allow", [])
+for rule in (f"Read({vault_root}/**)",
+             f"Write({vault_root}/**)",
+             f"Edit({vault_root}/**)"):
+    if rule not in allow:
+        allow.append(rule)
 
 with open(settings_path, "w") as f:
     json.dump(settings, f, indent=2, ensure_ascii=False)
