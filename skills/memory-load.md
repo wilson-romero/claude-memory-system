@@ -1,0 +1,32 @@
+---
+description: Load Wilson's full memory from the Obsidian vault of this machine
+---
+
+Load Wilson's persistent memory from this machine's Obsidian vault.
+
+## Instructions
+
+1. Get the vault root: run `cat ~/.claude/memoria.env` and use `MEMORIA_VAULT_ROOT` (call it `$VAULT` below).
+
+2. Read these files with the Read tool, in order (skip silently any that don't exist):
+   - `$VAULT/Memoria/wilson-perfil.md` — personal profile, accounts, equipment
+   - `$VAULT/Memoria/preferencias-jarvis.md` — behavior preferences
+   - `$VAULT/Memoria/proyectos-activos.md` — active projects and status
+   - `$VAULT/Memoria/contexto-reciente.md` — recent events (focus on last 2-3 weeks)
+   - `$VAULT/Memoria-CC/MEMORY.md` — index of saved memories (scan titles only)
+
+3. Show Wilson a summary in Spanish using this exact format:
+
+---
+**Memoria cargada** — [today's date] — [machine name from MEMORIA_MACHINE]
+
+**Proyectos activos:** [list with name + status, one line each]
+
+**Contexto reciente:** [2-4 bullets of the most relevant recent events]
+
+**Preferencias activas:** [2-3 most important behavior preferences]
+
+**Listo para trabajar.**
+---
+
+If a file doesn't exist or is empty, say so in the summary. Do not invent information.

@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# install.sh — bootstrap/refresh the Claude memory system on this machine.
+# Idempotent: safe to re-run; also used by update.sh after git pull.
+# Usage: install.sh [--dry-run]
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DRY_RUN=0
+[ "${1:-}" = "--dry-run" ] && DRY_RUN=1
+
+say() { echo "[install] $*"; }
+run() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    say "DRY: $*"
+  else
+    "$@"
+  fi
+}
+
+# ── 1. Dependencies ───────────────────────────────────────────────────────────
+for dep in git python3; do
+  command -v "$dep" >/dev/null 2>&1 || { say "ERROR: missing dependency: $dep"; exit 1; }
+done
+
+# ── 2. Per-machine config ─────────────────────────────────────────────────────
+HOST=$(hostname)
+MACHINE_ENV="${REPO_DIR}/config/machines/${HOST}.env"
+if [ ! -f "$MACHINE_ENV" ]; then
+  say "ERROR: no config for host '${HOST}'."
+  say "Create ${MACHINE_ENV} from config/memoria.env.example and re-run."
+  exit 1
+fi
+say "config: ${MACHINE_ENV} → ~/.claude/memoria.env"
+run mkdir -p "$HOME/.claude"
+run cp "$MACHINE_ENV" "$HOME/.claude/memoria.env"
+
+# shellcheck disable=SC1090
+source "$MACHINE_ENV"
+export MEMORIA_VAULT_ROOT MEMORIA_MACHINE MEMORIA_PROFILE
+export MEMORIA_REPO_DIR="$REPO_DIR"
+MEMORIA_STATE="$HOME/.claude/memoria-state"
+
+if [ ! -d "$MEMORIA_VAULT_ROOT" ]; then
+  say "ERROR: vault not found at ${MEMORIA_VAULT_ROOT}"
+  exit 1
+fi
+
+# ── 3. Pending migrations ─────────────────────────────────────────────────────
+applied() { grep -q "^MIGRATION_$1=done$" "$MEMORIA_STATE" 2>/dev/null; }
+for mig in "${REPO_DIR}/migrations/"[0-9]*.sh; do
+  [ -f "$mig" ] || continue
+  num=$(basename "$mig" | cut -d- -f1)
+  if applied "$num"; then
+    say "migration ${num}: already applied"
+    continue
+  fi
+  say "migration ${num}: running $(basename "$mig")"
+  if [ "$DRY_RUN" -eq 0 ]; then
+    bash "$mig"
+    echo "MIGRATION_${num}=done" >> "$MEMORIA_STATE"
+  fi
+done
+
+# ── 4. Skills → ~/.claude/commands/ ───────────────────────────────────────────
+run mkdir -p "$HOME/.claude/commands"
+for skill in "${REPO_DIR}/skills/"*.md; do
+  name=$(basename "$skill")
+  say "skill: ${name}"
+  run ln -sf "$skill" "$HOME/.claude/commands/${name}"
+done
+
+# ── 5. Render prompts (curator + dream) ───────────────────────────────────────
+CONFIDENTIALITY=""
+if [ "$MEMORIA_PROFILE" = "work" ]; then
+  CONFIDENTIALITY="CONFIDENCIALIDAD: esta es una máquina de TRABAJO. Nunca copies datos de clientes, credenciales ni nombres de sistemas internos fuera del vault de esta máquina. Todo lo que escribas lleva machine: ${MEMORIA_MACHINE}."
+fi
+
+render_prompt() {
+  # $1=template $2=dest
+  python3 - "$1" "$2" <<PYEOF
+import sys, os
+tpl, dest = sys.argv[1], sys.argv[2]
+with open(tpl) as f:
+    content = f.read()
+content = (content
+    .replace("{{VAULT_ROOT}}", os.environ["MEMORIA_VAULT_ROOT"])
+    .replace("{{MACHINE}}", os.environ["MEMORIA_MACHINE"])
+    .replace("{{PROFILE}}", os.environ["MEMORIA_PROFILE"])
+    .replace("{{CONFIDENTIALITY}}", os.environ.get("CONFIDENTIALITY", "")))
+with open(dest, "w") as f:
+    f.write(content)
+PYEOF
+}
+
+export CONFIDENTIALITY
+say "render: curator + dream prompts"
+if [ "$DRY_RUN" -eq 0 ]; then
+  render_prompt "${REPO_DIR}/templates/curator-prompt.md.tmpl" "$HOME/.claude/memoria-curator-prompt.md"
+  render_prompt "${REPO_DIR}/templates/dream-prompt.md.tmpl" "$HOME/.claude/memoria-dream-prompt.md"
+fi
+
+# ── 6. Merge hooks into ~/.claude/settings.json ───────────────────────────────
+SETTINGS="$HOME/.claude/settings.json"
+say "hooks: merging into ${SETTINGS}"
+if [ "$DRY_RUN" -eq 0 ]; then
+  [ -f "$SETTINGS" ] && cp "$SETTINGS" "${SETTINGS}.bak.$(date +%Y%m%d%H%M%S)"
+  python3 - "$SETTINGS" "$REPO_DIR" "$HOME/.claude/memoria-curator-prompt.md" <<'PYEOF'
+import json, os, sys
+
+settings_path, repo_dir, curator_path = sys.argv[1], sys.argv[2], sys.argv[3]
+
+settings = {}
+if os.path.exists(settings_path):
+    with open(settings_path) as f:
+        settings = json.load(f)
+
+with open(curator_path) as f:
+    curator_prompt = f.read()
+
+load_cmd = os.path.join(repo_dir, "scripts", "memoria-load.sh")
+capture_cmd = os.path.join(repo_dir, "scripts", "memoria-capture.sh")
+
+hooks = settings.setdefault("hooks", {})
+
+def is_ours(h):
+    cmd = h.get("command", "")
+    prompt = h.get("prompt", "")
+    return ("memoria-load.sh" in cmd or "memoria-capture.sh" in cmd
+            or "obsidian-load.sh" in cmd or "obsidian-sync.sh" in cmd
+            or "memoria persistente de Wilson" in prompt)
+
+# SessionStart: our loader
+ss = [g for g in hooks.get("SessionStart", [])
+      if not any(is_ours(h) for h in g.get("hooks", []))]
+ss.append({"hooks": [{"type": "command", "command": load_cmd, "timeout": 15}]})
+hooks["SessionStart"] = ss
+
+# Stop: deterministic capture + agent curator (replaces previous memory hooks)
+stop = [g for g in hooks.get("Stop", [])
+        if not any(is_ours(h) for h in g.get("hooks", []))]
+stop.append({"hooks": [
+    {"type": "command", "command": capture_cmd, "timeout": 30},
+    {"type": "agent", "prompt": curator_prompt, "timeout": 120},
+]})
+hooks["Stop"] = stop
+
+with open(settings_path, "w") as f:
+    json.dump(settings, f, indent=2, ensure_ascii=False)
+print("hooks merged ok")
+PYEOF
+fi
+
+# ── 7. systemd timer for the nightly dream ────────────────────────────────────
+if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+  say "systemd: installing memoria-dream.{service,timer}"
+  run mkdir -p "$HOME/.config/systemd/user"
+  if [ "$DRY_RUN" -eq 0 ]; then
+    sed "s|%h/Code/wilson-romero/claude-memory-system|${REPO_DIR}|" \
+      "${REPO_DIR}/scripts/systemd/memoria-dream.service" \
+      > "$HOME/.config/systemd/user/memoria-dream.service"
+    cp "${REPO_DIR}/scripts/systemd/memoria-dream.timer" \
+      "$HOME/.config/systemd/user/memoria-dream.timer"
+    systemctl --user daemon-reload
+    systemctl --user enable --now memoria-dream.timer
+  fi
+else
+  say "systemd: user session not available — dream relies on SessionStart fallback"
+fi
+
+# ── 8. Record installed version ───────────────────────────────────────────────
+VERSION=$(cat "${REPO_DIR}/VERSION")
+if [ "$DRY_RUN" -eq 0 ]; then
+  touch "$MEMORIA_STATE"
+  if grep -q "^VERSION=" "$MEMORIA_STATE"; then
+    sed -i "s|^VERSION=.*|VERSION=${VERSION}|" "$MEMORIA_STATE"
+  else
+    echo "VERSION=${VERSION}" >> "$MEMORIA_STATE"
+  fi
+fi
+
+say "done — system version ${VERSION} installed on ${MEMORIA_MACHINE}"
+say "verify: open a Claude Code session and check the injected context banner"

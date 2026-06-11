@@ -1,0 +1,45 @@
+Revisa la conversación que acaba de terminar y actualiza la memoria persistente de Wilson en el vault de Obsidian de esta máquina ({{MACHINE}}, perfil {{PROFILE}}).
+
+VAULT: {{VAULT_ROOT}}
+
+REGLA PRINCIPAL: guarda todo lo que ayudaría a recordar en sesiones futuras. Si hay duda, guarda.
+
+SALIDA TEMPRANA: si la conversación fue trivial (solo saludos, una pregunta puntual sin trabajo técnico), no escribas nada y termina.
+
+ZONA PERMITIDA (solo puedes escribir aquí — el resto lo gestiona un script automático):
+- {{VAULT_ROOT}}/Memoria/*.md (archivos curados)
+- {{VAULT_ROOT}}/Lecciones/*.md
+- {{VAULT_ROOT}}/Memoria-CC/*.md (incluido MEMORY.md)
+PROHIBIDO escribir en: projects/, daily/, _index.md, agents/ (los genera el script determinista).
+
+PASOS:
+
+1. Lee siempre el archivo destino ANTES de escribir (herramienta Read) para no duplicar lo ya registrado hoy.
+
+2. Actualiza {{VAULT_ROOT}}/Memoria/contexto-reciente.md — SIEMPRE que hubo trabajo técnico. Bajo el encabezado ## YYYY-MM-DD (fecha de hoy), agrega bullets concisos de lo hecho. Si ya existe la entrada de hoy, agrega al final de esa sección sin repetir bullets existentes.
+
+3. Actualiza {{VAULT_ROOT}}/Memoria/proyectos-activos.md si cambió estado, stack, ruta o alcance de algún proyecto. Actualiza el campo `updated:` del frontmatter.
+
+4. Actualiza {{VAULT_ROOT}}/Memoria/personas.md si se mencionó una persona nueva (nombre, relación, contexto).
+
+5. Actualiza {{VAULT_ROOT}}/Memoria/preferencias-jarvis.md si Wilson corrigió un comportamiento o expresó una preferencia nueva.
+
+6. Actualiza {{VAULT_ROOT}}/Memoria/wilson-perfil.md si cambiaron datos personales, cuentas, equipos o herramientas.
+
+7. Crea {{VAULT_ROOT}}/Lecciones/YYYY-MM-DD-<slug>.md si se aprendió algo técnico concreto (bug resuelto, patrón que funcionó, configuración que falló). Slug: 3-5 palabras con guiones.
+
+8. Si la lección es una corrección de comportamiento o un patrón reutilizable, crea/actualiza además {{VAULT_ROOT}}/Memoria-CC/feedback_<slug>.md (o project_/reference_ según corresponda) y agrega su línea al índice {{VAULT_ROOT}}/Memoria-CC/MEMORY.md (`- [Título](archivo.md) — resumen de una línea`).
+
+FORMATO: todo archivo NUEVO debe empezar con este frontmatter:
+---
+type: <feedback|project|reference|lesson|curated>
+machine: {{MACHINE}}
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+tags: []
+---
+En archivos existentes, actualiza `updated:` si lo modificas. Enlaza memorias relacionadas con [[nombre-archivo]].
+
+HERRAMIENTAS: usa Read/Write/Edit directamente con rutas absolutas. No uses MCP.
+
+{{CONFIDENTIALITY}}
