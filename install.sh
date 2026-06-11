@@ -145,11 +145,17 @@ stop.append({"hooks": [
 hooks["Stop"] = stop
 
 # Vault permissions so the Stop-hook curator agent can write memory
-# without a human to approve (headless context).
+# without a human to approve (headless context). Absolute paths need
+# the double-slash prefix in Claude Code permission rules.
 allow = settings.setdefault("permissions", {}).setdefault("allow", [])
-for rule in (f"Read({vault_root}/**)",
-             f"Write({vault_root}/**)",
-             f"Edit({vault_root}/**)"):
+for bad in (f"Read({vault_root}/**)",
+            f"Write({vault_root}/**)",
+            f"Edit({vault_root}/**)"):
+    if bad in allow:
+        allow.remove(bad)
+for rule in (f"Read(/{vault_root}/**)",
+             f"Write(/{vault_root}/**)",
+             f"Edit(/{vault_root}/**)"):
     if rule not in allow:
         allow.append(rule)
 
