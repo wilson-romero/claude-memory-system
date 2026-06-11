@@ -25,6 +25,17 @@ CWD=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.load(sys.stdi
 TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null || echo "")
 
 [ -z "$CWD" ] && CWD="$HOME"
+
+# Never capture sessions whose cwd is inside the vault itself —
+# they create recursive noise folders (e.g. projects/home-mark-vault-Claude).
+OBSIDIAN_TREE="$(dirname "$MEMORIA_VAULT_ROOT")"
+case "$CWD" in
+  "$OBSIDIAN_TREE"*)
+    log "capture: skipped (cwd inside vault tree: $CWD)"
+    exit 0
+    ;;
+esac
+
 PROJECT_SLUG=$(vault_slug "$CWD")
 CC_PROJECT_SLUG=$(cc_slug "$CWD")
 
