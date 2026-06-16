@@ -43,6 +43,8 @@
 
 **Conflictos de sync de nube** (rclone/OneDrive) → los artefactos van a cuarentena en `Memoria/Archivo/conflictos/` (los mueve el Sueño o `/memory-maintenance`). El capture escribe atómico (tmp+mv) para minimizarlos. En PC-WILSON el bisync corre cada 15 min (`systemctl --user status obsidian-sync.timer`, log en `~/.local/log/obsidian-sync.log`).
 
+**Sync rclone (PC-WILSON) versionado en el repo**: el script `scripts/sync-obsidian.sh` y sus units `scripts/systemd/obsidian-sync.{service,timer}` ahora viven en el repo y los despliega `install.sh` cuando `MEMORIA_SYNC=rclone` (lee `MEMORIA_SYNC_REMOTE`, default `gdrive:Obsidian`). Política de conflicto **`--conflict-resolve newer` + `--conflict-loser delete`**: ante divergencia gana el archivo más nuevo (conserva el nombre canónico) y el perdedor se borra del vault pero queda respaldado en `--backup-dir` (`~/.local/state/obsidian-sync-conflicts` y `<remote>:Obsidian-sync-conflicts`). Esto evita que se acumulen archivos `*.conflict1/2` en el vault. Si aparecen `*.conflict*` legados (creados antes de esta política), restaurar el canónico si falta su base y mover el resto a cuarentena. Nota: BOGWROMEROCA usa OneDrive (otro mecanismo), no este script.
+
 **Restaurar settings.json** → `ls ~/.claude/settings.json.bak.*` y copiar el backup deseado.
 
 ## Política de retención

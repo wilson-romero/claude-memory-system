@@ -1,0 +1,8 @@
+[Unit]
+Description=Obsidian vault bidirectional sync (rclone bisync)
+
+[Service]
+Type=oneshot
+ExecStart=%h/Code/wilson-romero/claude-memory-system/scripts/sync-obsidian.sh
+TimeoutStartSec=600
+Nice=10

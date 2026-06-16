@@ -182,6 +182,25 @@ else
   say "systemd: user session not available — dream relies on SessionStart fallback"
 fi
 
+# ── 7b. systemd timer for the rclone vault sync (only when MEMORIA_SYNC=rclone) ─
+if [ "${MEMORIA_SYNC:-none}" = "rclone" ]; then
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    say "systemd: installing obsidian-sync.{service,timer} (rclone bisync)"
+    run mkdir -p "$HOME/.config/systemd/user"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      sed "s|%h/Code/wilson-romero/claude-memory-system|${REPO_DIR}|" \
+        "${REPO_DIR}/scripts/systemd/obsidian-sync.service" \
+        > "$HOME/.config/systemd/user/obsidian-sync.service"
+      cp "${REPO_DIR}/scripts/systemd/obsidian-sync.timer" \
+        "$HOME/.config/systemd/user/obsidian-sync.timer"
+      systemctl --user daemon-reload
+      systemctl --user enable --now obsidian-sync.timer
+    fi
+  else
+    say "systemd: user session not available — rclone sync timer not installed"
+  fi
+fi
+
 # ── 8. Record installed version ───────────────────────────────────────────────
 VERSION=$(cat "${REPO_DIR}/VERSION")
 if [ "$DRY_RUN" -eq 0 ]; then

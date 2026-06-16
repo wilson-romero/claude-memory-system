@@ -1,0 +1,11 @@
+[Unit]
+Description=Sync Obsidian vault every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target
