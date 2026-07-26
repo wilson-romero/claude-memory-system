@@ -18,7 +18,15 @@ load_config
 VAULT_ROOT="$MEMORIA_VAULT_ROOT"
 CLAUDE_PROJECTS_DIR="${HOME}/.claude/projects"
 
-HOOK_INPUT=$(cat)
+# Claude Code delivers the hook payload as a single JSON line but does NOT always
+# close the pipe afterwards. `$(cat)` waits for EOF, so on the Stop event it blocked
+# until the 30s hook timeout killed the script — 39 runs in a row died here without
+# writing anything, which is why session capture kept coming out empty.
+#
+# `read -t` returns as soon as the line arrives and is bounded when the pipe stays
+# open. On timeout bash still assigns whatever it read, so `|| true` keeps the data
+# instead of discarding it.
+IFS= read -r -t 5 HOOK_INPUT || true
 
 SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_id','unknown'))" 2>/dev/null || echo "unknown")
 CWD=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('cwd',''))" 2>/dev/null || echo "")
