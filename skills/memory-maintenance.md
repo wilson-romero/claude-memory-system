@@ -20,4 +20,29 @@ Run a health check of the second memory system and report in Spanish.
 
 6. **Index integrity**: verify every `.md` file in `$MEMORIA_VAULT_ROOT/Memoria-CC/` (except MEMORY.md) has a line in MEMORY.md, and every line points to an existing file. Offer to fix discrepancies.
 
-7. Report results in Spanish as a short checklist: ✅ ok / ⚠ issue + suggested action.
+7. **Cloud sync health** (only when `MEMORIA_SYNC=rclone`). A green `.timer` proves the
+   schedule fires, NOT that the sync ran — check the `.service` and the log:
+
+   ```bash
+   systemctl --user is-active obsidian-sync.timer      # schedule alive?
+   systemctl --user is-failed obsidian-sync.service    # last RUN failed?
+   grep -c "Bisync critical error" "$HOME/.local/log/obsidian-sync.log"
+   grep "sync done" "$HOME/.local/log/obsidian-sync.log" | tail -1   # last SUCCESS
+   ```
+
+   Flag if the last `sync done` is older than **1 day**, and report how long it has been
+   failing — not just that it failed. On 2026-07-29 this went unnoticed for **43 days**
+   with the timer green and 806 of 885 runs aborting.
+
+   Two specific failures worth naming in the report:
+   - `cannot find prior Path1 or Path2 listings` → the bisync baseline is gone (usually
+     after the vault path changed). Despite what `--resilient` says, this only recovers
+     with a one-off `--resync`, which `sync-obsidian.sh` never passes. Do NOT run it
+     blindly: a resync UNIONS both sides.
+   - Before any `--resync`, confirm the remote holds THIS machine's vault and no other:
+     `rclone check "$(dirname "$MEMORIA_VAULT_ROOT")" "$MEMORIA_SYNC_REMOTE"` — a near-zero
+     match count means the remote belongs to a different vault, and syncing would merge
+     two memories that must stay separate (`docs/arquitectura.md`: one vault per machine,
+     never crossing). Each machine gets its OWN remote folder.
+
+8. Report results in Spanish as a short checklist: ✅ ok / ⚠ issue + suggested action.
