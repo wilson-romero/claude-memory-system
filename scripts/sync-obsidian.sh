@@ -41,12 +41,20 @@ if [ "$(printf '%s\n1.66.0\n' "$RCLONE_VER" | sort -V | head -1)" != "1.66.0" ];
     exit 1
 fi
 
-# Prevent concurrent syncs (manual run vs systemd timer)
+# Prevent concurrent syncs (manual run vs systemd timer).
+# The lock holds the owner PID: `trap EXIT` does NOT run on SIGKILL or an OOM
+# kill, so a plain -f test would let one hard death silence every later run
+# ("sync already running") while systemd kept seeing exit 0 — the same
+# die-in-green failure this script already had with rclone's --resilient.
 if [ -f "$LOCK_FILE" ]; then
-    echo "[$(date -Iseconds)] sync already running, skipping" >> "$LOG_FILE"
-    exit 0
+    lock_pid=$(cat "$LOCK_FILE" 2>/dev/null || true)
+    if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
+        echo "[$(date -Iseconds)] sync already running (pid $lock_pid), skipping" >> "$LOG_FILE"
+        exit 0
+    fi
+    echo "[$(date -Iseconds)] stale lock from pid ${lock_pid:-unknown}, taking over" >> "$LOG_FILE"
 fi
-touch "$LOCK_FILE"
+echo $$ > "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 
 echo "[$(date -Iseconds)] starting sync ($VAULT_LOCAL <-> $VAULT_REMOTE)" >> "$LOG_FILE"
