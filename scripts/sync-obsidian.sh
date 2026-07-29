@@ -20,6 +20,27 @@ LOCK_FILE="/tmp/obsidian-sync.lock"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 
+# --conflict-resolve / --conflict-loser / --resilient need rclone >= 1.66.
+# Debian/Ubuntu ship 1.60 in /usr/bin, so prefer a newer build if one exists and
+# fail loudly instead of letting bisync die on "unknown flag" every 5 minutes.
+RCLONE_BIN="${MEMORIA_RCLONE:-}"
+if [ -z "$RCLONE_BIN" ]; then
+    for cand in /usr/local/bin/rclone "$(command -v rclone 2>/dev/null)"; do
+        [ -x "$cand" ] || continue
+        RCLONE_BIN="$cand"
+        break
+    done
+fi
+if [ -z "$RCLONE_BIN" ]; then
+    echo "[$(date -Iseconds)] ERROR: rclone not found" >> "$LOG_FILE"
+    exit 1
+fi
+RCLONE_VER=$("$RCLONE_BIN" version 2>/dev/null | head -1 | sed 's/rclone v//')
+if [ "$(printf '%s\n1.66.0\n' "$RCLONE_VER" | sort -V | head -1)" != "1.66.0" ]; then
+    echo "[$(date -Iseconds)] ERROR: ${RCLONE_BIN} is v${RCLONE_VER}; this script needs >= 1.66 for --conflict-resolve/--resilient. Install a newer rclone (https://rclone.org/install/) or set MEMORIA_RCLONE." >> "$LOG_FILE"
+    exit 1
+fi
+
 # Prevent concurrent syncs (manual run vs systemd timer)
 if [ -f "$LOCK_FILE" ]; then
     echo "[$(date -Iseconds)] sync already running, skipping" >> "$LOG_FILE"
@@ -30,7 +51,7 @@ trap 'rm -f "$LOCK_FILE"' EXIT
 
 echo "[$(date -Iseconds)] starting sync ($VAULT_LOCAL <-> $VAULT_REMOTE)" >> "$LOG_FILE"
 
-rclone bisync "$VAULT_LOCAL" "$VAULT_REMOTE" \
+"$RCLONE_BIN" bisync "$VAULT_LOCAL" "$VAULT_REMOTE" \
     --create-empty-src-dirs \
     --compare size,modtime,checksum \
     --resilient \
