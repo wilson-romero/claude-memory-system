@@ -33,7 +33,79 @@ Run a health check of the second memory system and report in Spanish.
    consolidation did not happen"* is very different from *"the dream did not run"*. The first
    one keeps producing reports and looks healthy.
 
-6. **Index integrity**: verify every `.md` file in `$MEMORIA_VAULT_ROOT/Memoria-CC/` (except MEMORY.md) has a line in MEMORY.md, and every line points to an existing file. Offer to fix discrepancies.
+6. **Index integrity**: the index is `MEMORY.md` **plus its branches** (`MEMORY-<topic>.md`), so
+   build the linked set from all of them — a file indexed in a branch is NOT an orphan. A link is
+   dangling only when the path it points at **does not exist** (`os.path.exists`); most point out
+   of `Memoria-CC` (`../Lecciones/…`), and comparing paths against bare filenames reports every
+   one of them as broken. Also **parse** the frontmatter instead of grepping it: an unquoted
+   `description:` containing `": "` breaks the YAML, and the file still looks perfect.
+
+   ```bash
+   cd "$MEMORIA_VAULT_ROOT/Memoria-CC" && python3 -c '
+   import os,re,yaml
+   idx=sorted(f for f in os.listdir(".") if f.startswith("MEMORY") and f.endswith(".md"))
+   linked=set()
+   for f in idx: linked|=set(re.findall(r"\]\(<?([^)>]+\.md)>?\)", open(f,encoding="utf-8").read()))
+   actual={f for f in os.listdir(".") if f.endswith(".md") and f not in idx}
+   print("dangling:",[r for r in sorted(linked) if not os.path.exists(r)])
+   print("orphans:",sorted(actual-linked))
+   for f in sorted(actual):
+       t=open(f,encoding="utf-8").read()
+       if t.startswith("---"):
+           try: fm=yaml.safe_load(t.split("---",2)[1]) or {}
+           except Exception as e: print("BROKEN YAML:",f); continue
+           if not fm.get("description"): print("no description:",f)
+   '
+   ```
+
+6b. **Index size — the silent one**. `MEMORY.md` is the only file loaded every session and it is
+   read up to **~24 KB**; anything past that is **dropped with no warning**, so those entries stop
+   existing for whoever reads it. On 2026-07-29 it reached **29 KB and lost 32 entries** — nothing
+   was broken, no link was dead, `grep` found everything, and a third of the index simply never
+   arrived. Report the size of every index file and flag `MEMORY.md` over **17 KB** (the headroom
+   target), not just over the hard limit:
+
+   ```bash
+   cd "$MEMORIA_VAULT_ROOT/Memoria-CC" && wc -c MEMORY*.md | sort -n
+   ```
+
+   The fix is **never to delete entries**: move a whole thematic block to its `MEMORY-<topic>.md`
+   branch and leave a one-line pointer. Moving means *moving* — the 29 KB happened because a
+   previous split **copied** the blocks without removing them, leaving 80 duplicated links, two
+   unreachable branches and the file just as big.
+
+6c. **Linger — why a green timer still never runs**. A `--user` timer only fires while the user
+   manager is alive, and without linger that manager dies with the login session. A nightly 03:30
+   job then never runs on a machine nobody is logged into at 03:30, while `is-active` and
+   `is-enabled` both stay green. Both personal machines were in that state; the dream's reports
+   tracked login days, not nights.
+
+   ```bash
+   loginctl show-user "$(id -un)" -p Linger --value      # must be "yes"
+   systemctl --user list-timers memoria-dream.timer --all   # LAST column: did it ever fire?
+   ```
+
+   If it is `no`, offer `loginctl enable-linger "$(id -un)"` (no sudo needed for one's own user).
+
+6d. **Divergence with the peer** (only when `MEMORIA_PEER` is set in `~/.claude/memoria.local.env`).
+   The union runs `rsync --ignore-existing`, which copies only files that are **missing**: it never
+   clobbers, and therefore **never propagates an improvement to a file that already exists on the
+   other side**. Counting files does not detect this — on 2026-07-29 both machines had the same
+   493 filenames with none exclusive to either, and **10 differed in content**. Compare md5:
+
+   ```bash
+   cd "$MEMORIA_VAULT_ROOT" && find Lecciones Memoria-CC Decisiones -name '*.md' \
+     -exec md5sum {} + | sort -k2 > /tmp/local.md5
+   ssh -p "$MEMORIA_PEER_PORT" "$MEMORIA_PEER" 'cd "$MEMORIA_PEER_VAULT" && find Lecciones Memoria-CC Decisiones -name "*.md" -exec md5sum {} + | sort -k2' > /tmp/peer.md5
+   join -j2 -o 0,1.1,2.1 /tmp/local.md5 /tmp/peer.md5 | awk '$2!=$3{print $1}'
+   ```
+
+   **Report the divergence, never resolve it in bulk.** The correct direction changes per file: on
+   2026-07-29 six files were better locally (filled-in frontmatter) but one was better on the peer
+   (146 lines vs 117 — it carried the correction that the local copy still denied). A blind
+   local→peer copy would have destroyed 34 good lines. For each divergent file, measure what each
+   side contributes (`comm -23` / `comm -13` over its non-empty lines) and decide file by file.
+   `MEMORY*.md` and `_INDEX.md` are **per-machine and must diverge** — do not flag them.
 
 7. **Cloud sync health** (only when `MEMORIA_SYNC=rclone`). A green `.timer` proves the
    schedule fires, NOT that the sync ran — check the `.service` and the log:

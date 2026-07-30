@@ -188,6 +188,21 @@ PYEOF
 fi
 
 # ── 7. systemd timer for the nightly dream ────────────────────────────────────
+# A --user timer only fires while the user manager is alive. Without linger that
+# manager dies with the login session, so a nightly 03:30 job simply never runs
+# on a machine nobody is logged into at 03:30 — enabled+active the whole time.
+# Both personal machines were in that state until 2026-07-29: the dream's reports
+# tracked login days, not nights.
+if command -v loginctl >/dev/null 2>&1; then
+  if [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" = "yes" ]; then
+    say "systemd: linger already enabled (user timers survive logout)"
+  else
+    say "systemd: enabling linger so the nightly timers survive logout"
+    run loginctl enable-linger "$(id -un)" || \
+      say "systemd: WARNING could not enable linger — the dream will only fire while logged in"
+  fi
+fi
+
 if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
   say "systemd: installing memoria-dream.{service,timer}"
   run mkdir -p "$HOME/.config/systemd/user"
