@@ -67,6 +67,17 @@ Es **unión, no sincronización**: `rsync -a --ignore-existing` en ambos sentido
 
 `_INDEX.md` y `MEMORY.md` quedan **excluidos**: son resúmenes curados, no artefactos append-only; copiarlos a ciegas los estropea. Los fusiona el curador o el Sueño.
 
+> ⚠️ **El precio de `--ignore-existing`: la unión trae ficheros NUEVOS, no propaga MEJORAS.**
+> Editar una lección que ya existe en la otra máquina no viaja **nunca** — se queda anclada
+> donde nació. Y el chequeo barato no lo ve: el **2026-07-29** las dos máquinas tenían los
+> **mismos 493 nombres, ninguno exclusivo, y 10 diferían en contenido**. Contar ficheros da
+> verde; la comprobación válida es **md5 por fichero** (la hace `/memory-maintenance`).
+>
+> Al reconciliar, **la dirección correcta cambia por fichero** y por eso `sync-knowledge.sh`
+> **reporta pero no resuelve**: ese día 6 ficheros estaban mejor en `mark-PC` y **1 estaba
+> mejor en `PC-WILSON`** (146 líneas contra 117: llevaba la corrección que la copia local
+> todavía negaba). Una copia en bloque en cualquier sentido habría borrado conocimiento bueno.
+
 Se activa solo en las máquinas que declaren `MEMORIA_PEER` / `MEMORIA_PEER_VAULT` en su `.env`. Si el peer está apagado —normal en equipos personales— registra y sale con 0. **BOGWROMEROCA (trabajo) no declara peer**, y así queda aislada.
 
 ### 3. El sistema (este repo)
