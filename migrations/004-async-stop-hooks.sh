@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 004 — seed the state keys used by the memory watchdog (v1.3.0). Idempotent.
+# 004 — seed the state keys used by the memory watchdog (v1.4.0). Idempotent.
 #
 # The Stop hooks became asynchronous, so memoria-load.sh now counts sessions
 # since the last VERIFIED write of each layer. Without a seed, the first five

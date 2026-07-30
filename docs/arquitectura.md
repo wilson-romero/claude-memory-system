@@ -39,7 +39,7 @@ Regla de oro: **ownership disjunto**. El capture (determinista) y el curador (ag
 
 1. **SessionStart** → `memoria-load.sh` inyecta (~6KB): banner de máquina, `_project.md` del proyecto actual, última entrada de contexto-reciente, índice de agentes, índice de shared-knowledge. También: aviso de versión desactualizada y lanzamiento del Sueño si lleva >24h sin correr.
 2. **Trabajo normal** — Claude puede leer cualquier archivo del vault con Read.
-3. **Stop** → dos hooks, **los dos en segundo plano** (desde v1.3.0 el turno se libera al instante):
+3. **Stop** → dos hooks, **los dos en segundo plano** (desde v1.4.0 el turno se libera al instante):
    - `memoria-capture.sh` — `"async": true`: nota de sesión, `_project.md`, daily, índices, banco de agentes. SIEMPRE corre. Nada decide sobre su salida, así que no hay razón para esperarlo.
    - `memoria-curator.sh` — `"asyncRewake": true`: lanza el curador en `claude -p` headless (destila contexto-reciente, lecciones, feedback a Memoria-CC; salida temprana si la sesión fue trivial). **No puede ser un hook `agent`**: los hooks `agent` no aceptan `async` ni `asyncRewake`, y por eso cada turno pagaba hasta sus 120 s.
 4. **La garantía de que la memoria se escriba** — ver § *Hooks asíncronos sin fallo silencioso*.
