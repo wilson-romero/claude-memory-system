@@ -18,10 +18,16 @@ TAREAS (en orden de prioridad, hasta agotar el límite de 10):
 
 3. ARCHIVAR lo irrelevante: memorias de Memoria-CC claramente obsoletas (lección superada por otra más nueva, proyecto cerrado hace meses) → mover a Archivo/ y quitar su línea de MEMORY.md. Solo si es evidente; ante la duda, no archives.
 
-4. REPARAR el índice: huérfanos de la Fase 1 (archivos de Memoria-CC sin entrada en MEMORY.md) → agrega su línea con un buen resumen. Entradas colgantes (apuntan a archivo inexistente) → elimínalas del índice.
+4. REPARAR el índice: huérfanos de la Fase 1 (archivos de Memoria-CC sin entrada en NINGÚN índice) → agrega su línea con un buen resumen, **en el sub-índice temático que le toque** (ver EL ÍNDICE TIENE UN LÍMITE). Entradas colgantes → **antes de quitar una, comprueba con Read/Glob que el archivo realmente no existe**; los enlaces a `../Lecciones/` son válidos y NUNCA se borran por parecer externos.
 
-5. ENRIQUECER: mejora descripciones pobres en MEMORY.md y agrega [[enlaces]] entre memorias claramente relacionadas.
+5. ENRIQUECER: mejora descripciones pobres y agrega [[enlaces]] entre memorias claramente relacionadas. Cuidado: enriquecer AGRANDA el índice — si `MEMORY.md` está cerca del límite, prioriza mover antes que añadir.
 
-FORMATO: mantén el frontmatter estándar; actualiza `updated:` en todo lo que toques.
+EL ÍNDICE TIENE UN LÍMITE DE CARGA (regla dura):
+- `MEMORY.md` es lo único que se carga en cada sesión, y **se lee hasta ~24 KB: lo que pase de ahí se descarta EN SILENCIO** — esas entradas dejan de existir para quien lo lea. El 2026-07-29 llegó a 29 KB y perdió 32 entradas sin que nada avisara.
+- Por eso el índice está **ramificado** en `MEMORY-<tema>.md` (técnico, proyectos, cifras…), enlazados desde `MEMORY.md`. Los ficheros indexados en una rama **no son huérfanos**.
+- Deja siempre `MEMORY.md` **por debajo de 17 KB** (`wc -c`). Si lo superas: mueve un bloque temático completo a su rama y deja **una línea de puntero** — mover el bloque Y borrarlo del principal, no copiarlo (copiarlo sin borrarlo fue el error del 29/07: 80 enlaces duplicados y el fichero igual de grande).
+- **Nunca borres un enlace para ganar espacio.** Se fusionan ganchos o se ramifica.
+
+FORMATO: mantén el frontmatter estándar; actualiza `updated:` en todo lo que toques. Toda `description:` va **entre comillas**: un `:` seguido de espacio sin comillas rompe el YAML y la memoria deja de indexarse.
 
 {{CONFIDENTIALITY}}

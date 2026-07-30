@@ -119,18 +119,28 @@ for rel, ap in list(md_files.items()):
             f.write(new_content)
         os.replace(tmp, ap)
 
-# 3. MEMORY.md audit: dangling entries + files missing from the index
+# 3. Index audit: dangling entries + files missing from the index.
+#    The index is MEMORY.md *plus its branches* (MEMORY-<topic>.md): it outgrows the
+#    context read limit and gets split, so a file indexed in a branch is NOT an orphan.
+#    And a link is only dangling if the path it points at does not exist — most point
+#    out of Memoria-CC (../Lecciones/...), so comparing paths against bare filenames
+#    reports every one of them as dangling and invites the model to delete them.
 mcc = os.path.join(vault, "Memoria-CC")
 memory_md = os.path.join(mcc, "MEMORY.md")
 if os.path.isdir(mcc) and os.path.isfile(memory_md):
-    with open(memory_md) as f:
-        idx = f.read()
-    linked = set(re.findall(r"\]\(<?([^)>]+\.md)>?\)", idx))
-    actual = {fn for fn in os.listdir(mcc) if fn.endswith(".md") and fn != "MEMORY.md"}
-    for fn in sorted(linked - actual):
-        report["index_fixed"].append(f"entrada colgante en MEMORY.md: {fn}")
+    indexes = sorted(fn for fn in os.listdir(mcc)
+                     if fn.startswith("MEMORY") and fn.endswith(".md"))
+    linked = set()
+    for fn in indexes:
+        with open(os.path.join(mcc, fn)) as f:
+            linked |= set(re.findall(r"\]\(<?([^)>]+\.md)>?\)", f.read()))
+    actual = {fn for fn in os.listdir(mcc)
+              if fn.endswith(".md") and fn not in indexes}
+    for rel in sorted(linked):
+        if not os.path.exists(os.path.join(mcc, rel)):
+            report["index_fixed"].append(f"entrada colgante en el índice: {rel}")
     for fn in sorted(actual - linked):
-        report["orphans"].append(f"Memoria-CC/{fn} (sin entrada en MEMORY.md)")
+        report["orphans"].append(f"Memoria-CC/{fn} (sin entrada en el índice)")
 
     # 4. Duplicate candidates by similar filename stems
     stems = sorted(actual)
@@ -210,7 +220,7 @@ ${REPORT}
 
 cd "$MEMORIA_VAULT_ROOT"
 if timeout 600 "$CLAUDE_BIN" -p "$PROMPT" \
-    --model claude-haiku-4-5-20251001 \
+    --model claude-sonnet-5 \
     --allowedTools "Read,Write,Edit,Glob,Grep,Bash(mv:*),Bash(ls:*)" \
     >> "$MEMORIA_LOG" 2>&1; then
   log "dream: phase 2 done"
