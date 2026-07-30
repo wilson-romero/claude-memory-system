@@ -49,6 +49,36 @@ elif [ "${BEHIND:-0}" != "0" ]; then
   VERSION_WARNING="⚠ Hay ${BEHIND} commit(s) nuevos del sistema de memoria en GitHub. Ejecuta /memory-update."
 fi
 
+# ── Memory watchdog: does the memory still get written? ───────────────────────
+# The Stop hooks now run in the background (async / asyncRewake). A background
+# job that dies in silence would stop writing memory with nothing complaining —
+# the same failure as the 43-day-green sync timer. This counter is the signal
+# that does NOT depend on them: SessionStart is synchronous and always runs (if
+# it stopped, the injected context banner would disappear and that is visible).
+# Each session started adds one; capture and the curator reset their own counter
+# only after verifying they actually wrote something.
+MEMORY_WARNING=""
+IN_VAULT_TREE=0
+case "$CWD" in
+  "$(dirname "$MEMORIA_VAULT_ROOT")"*) IN_VAULT_TREE=1 ;;
+esac
+if [ "$IN_VAULT_TREE" -eq 0 ]; then
+  ALERT_AFTER="${MEMORIA_MISS_ALERT_AFTER:-5}"
+  for pair in "SESSIONS_SINCE_CAPTURE:LAST_CAPTURE:capture (notas de sesión)" \
+              "SESSIONS_SINCE_CURATOR:LAST_CURATOR_WRITE:curador (memoria semántica)"; do
+    COUNTER_KEY="${pair%%:*}"; rest="${pair#*:}"
+    STAMP_KEY="${rest%%:*}"; LABEL="${rest#*:}"
+    N=$(state_get "$COUNTER_KEY")
+    case "$N" in ''|*[!0-9]*) N=0 ;; esac
+    N=$((N + 1))
+    state_set "$COUNTER_KEY" "$N"
+    if [ "$N" -ge "$ALERT_AFTER" ]; then
+      LAST=$(state_get "$STAMP_KEY")
+      MEMORY_WARNING="${MEMORY_WARNING}⚠ La memoria NO se escribe: ${LABEL} lleva ${N} sesiones sin trabajo verificado (última vez: ${LAST:-nunca}). Revisa \`grep -E 'curator|capture' ${MEMORIA_LOG} | tail -20\`."$'\n'
+    fi
+  done
+fi
+
 # ── Dream fallback: if last dream >24h ago, launch it in background ───────────
 LAST_DREAM=$(state_get LAST_DREAM)
 if [ "$LAST_DREAM" != "$TODAY" ] && [ -x "${SCRIPT_DIR}/memoria-dream.sh" ]; then
@@ -70,6 +100,7 @@ fi
 
 export MB_BANNER="Máquina: ${MEMORIA_MACHINE} (perfil ${MEMORIA_PROFILE}) — vault: ${MEMORIA_VAULT_ROOT}"
 export MB_WARNING="$VERSION_WARNING"
+export MB_MEMORY_WARNING="$MEMORY_WARNING"
 export MB_PROJECT="$(read_capped "$PROJECT_NOTE" 3000)"
 export MB_CONTEXTO="$CONTEXTO_TAIL"
 export MB_AGENTS="$(read_capped "$AGENTS_INDEX" 1000)"
@@ -85,6 +116,10 @@ parts = ["## Segunda memoria (Obsidian)", os.environ.get("MB_BANNER", "")]
 warning = os.environ.get("MB_WARNING", "").strip()
 if warning:
     parts.append(warning)
+
+memory_warning = os.environ.get("MB_MEMORY_WARNING", "").strip()
+if memory_warning:
+    parts.append(memory_warning)
 
 project = os.environ.get("MB_PROJECT", "").strip()
 if project:

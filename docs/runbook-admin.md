@@ -17,9 +17,12 @@
 
 ## Estructura de los hooks (en ~/.claude/settings.json)
 
-- `SessionStart` → command `scripts/memoria-load.sh` (timeout 15s)
-- `Stop` → command `scripts/memoria-capture.sh` (30s) + agent con el prompt curador renderizado (120s)
-- `install.sh` los re-mergea de forma segura: hace backup `settings.json.bak.<timestamp>`, elimina solo los hooks propios (identificados por nombre de script o firma del prompt) y preserva todo lo demás.
+- `SessionStart` → command `scripts/memoria-load.sh` (timeout 15s, síncrono: inyecta contexto y **vigila** que la memoria se siga escribiendo)
+- `Stop` → los dos en segundo plano, el turno no espera a ninguno:
+  - command `scripts/memoria-capture.sh` (30s, `"async": true`)
+  - command `scripts/memoria-curator.sh` (900s, `"asyncRewake": true`) — lanza el curador en `claude -p` headless y **sale con código 2 si la memoria no se escribió**, lo que despierta la sesión con el motivo. Antes era un hook `agent` de 120s: los `agent` no aceptan `async`.
+- `install.sh` los re-mergea de forma segura: hace backup `settings.json.bak.<timestamp>`, elimina solo los hooks propios (identificados por nombre de script o firma del prompt curador, incluida la del hook `agent` legado) y preserva todo lo demás. **Si cambia la forma del hook, cámbiala aquí**: una reinstalación reescribe el bloque entero.
+- Variables opcionales del curador (en `config/machines/<host>.env`): `MEMORIA_CURATOR_MODEL` (default `claude-sonnet-5`), `MEMORIA_CURATOR_TIMEOUT` (600s), `MEMORIA_MISS_ALERT_AFTER` (5 sesiones).
 
 ## Archivos de estado
 
@@ -36,6 +39,18 @@
 
 **El capture no escribe** → probar a mano:
 `echo '{"cwd":"/ruta/proyecto","session_id":"test","transcript_path":""}' | bash scripts/memoria-capture.sh` y revisar el log.
+
+**El banner avisa "La memoria NO se escribe: … lleva N sesiones sin trabajo verificado"** → el
+contador de `memoria-load.sh` no se ha reseteado, así que capture o el curador llevan N sesiones sin
+escribir nada comprobable. Diagnóstico, en este orden:
+1. `grep -E "curator|capture" ~/.local/log/memoria-cc.log | tail -30` — cada corrida del curador deja
+   `curator: WROTE <n> file(s) [lista]`, `curator: skipped by model (trivial …)` o `curator: FAILED — <motivo>`.
+2. Probar el curador a mano (corre en primer plano, tarda ~1 min):
+   `echo '{"cwd":"/ruta/proyecto","session_id":"test","transcript_path":"","stop_hook_active":false}' | bash scripts/memoria-curator.sh; echo "exit=$?"`
+   Sale 0 si escribió o si la sesión era trivial; sale 2 con el motivo en stderr si no.
+3. Si son 5 sesiones triviales seguidas el aviso es un falso positivo: `LAST_CURATOR_SKIP` en
+   `~/.claude/memoria-state` lo delata. Resetear a mano con
+   `sed -i 's/^SESSIONS_SINCE_CURATOR=.*/SESSIONS_SINCE_CURATOR=0/' ~/.claude/memoria-state`.
 
 **El Sueño no corre** → `systemctl --user status memoria-dream.timer`; forzar con `bash scripts/memoria-dream.sh --force`. Si falta el binario claude o el prompt renderizado, la Fase 2 se salta (queda en el log) pero la Fase 1 siempre corre.
 

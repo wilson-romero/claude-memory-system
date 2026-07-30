@@ -457,5 +457,11 @@ fi
   echo "→ [[agents/_skills-index|Ver índice de agentes y skills]]"
 } | atomic_write "${INDEX_NOTE}"
 
+# Dated trace of the work DONE (the note exists), not of the attempt. The
+# SessionStart watchdog compares this against the sessions it has counted, so a
+# capture that silently stops running is reported instead of going unnoticed.
+state_set LAST_CAPTURE "$(date '+%Y-%m-%dT%H:%M:%S')"
+state_set SESSIONS_SINCE_CAPTURE 0
+
 log "capture: session ${SESSION_ID} → ${SESSION_NOTE}"
 exit 0

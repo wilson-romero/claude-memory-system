@@ -117,11 +117,17 @@ if os.path.exists(settings_path):
     with open(settings_path) as f:
         settings = json.load(f)
 
+# The curator hook is a command now, but the rendered prompt is what that command
+# feeds to `claude -p`: an empty render would leave the curator writing nothing,
+# so fail the install here instead.
 with open(curator_path) as f:
     curator_prompt = f.read()
+if not curator_prompt.strip():
+    raise SystemExit(f"ERROR: rendered curator prompt is empty: {curator_path}")
 
 load_cmd = os.path.join(repo_dir, "scripts", "memoria-load.sh")
 capture_cmd = os.path.join(repo_dir, "scripts", "memoria-capture.sh")
+curator_cmd = os.path.join(repo_dir, "scripts", "memoria-curator.sh")
 
 hooks = settings.setdefault("hooks", {})
 
@@ -129,6 +135,7 @@ def is_ours(h):
     cmd = h.get("command", "")
     prompt = h.get("prompt", "")
     return ("memoria-load.sh" in cmd or "memoria-capture.sh" in cmd
+            or "memoria-curator.sh" in cmd
             or "obsidian-load.sh" in cmd or "obsidian-sync.sh" in cmd
             or "memoria persistente de Wilson" in prompt)
 
@@ -138,12 +145,20 @@ ss = [g for g in hooks.get("SessionStart", [])
 ss.append({"hooks": [{"type": "command", "command": load_cmd, "timeout": 15}]})
 hooks["SessionStart"] = ss
 
-# Stop: deterministic capture + agent curator (replaces previous memory hooks)
+# Stop: deterministic capture + curator, BOTH in the background so the turn is
+# released immediately (v1.3.0).
+#   - capture: "async" — nothing decides on its output.
+#   - curator: "asyncRewake" — a command hook that runs the curator headless and
+#     exits 2 when the memory was NOT written, which wakes the session with the
+#     reason. It cannot be a `type: "agent"` hook any more: agent hooks accept
+#     neither async nor asyncRewake, so every turn paid their 120s timeout.
+# The rendered prompt still lives in ~/.claude/memoria-curator-prompt.md and the
+# script reads it from there.
 stop = [g for g in hooks.get("Stop", [])
         if not any(is_ours(h) for h in g.get("hooks", []))]
 stop.append({"hooks": [
-    {"type": "command", "command": capture_cmd, "timeout": 30},
-    {"type": "agent", "prompt": curator_prompt, "timeout": 120},
+    {"type": "command", "command": capture_cmd, "timeout": 30, "async": True},
+    {"type": "command", "command": curator_cmd, "timeout": 900, "asyncRewake": True},
 ]})
 hooks["Stop"] = stop
 
@@ -151,13 +166,17 @@ hooks["Stop"] = stop
 # without a human to approve (headless context). Absolute paths need
 # the double-slash prefix in Claude Code permission rules.
 allow = settings.setdefault("permissions", {}).setdefault("allow", [])
+# A Write(path) rule is NOT honoured for file permission checks: Claude Code
+# prints "only Edit(path) rules are ... Edit rules cover all file-editing tools"
+# on every run and ignores it. Drop it — that warning was landing inside the
+# curator's own log output.
 for bad in (f"Read({vault_root}/**)",
             f"Write({vault_root}/**)",
-            f"Edit({vault_root}/**)"):
+            f"Edit({vault_root}/**)",
+            f"Write(/{vault_root}/**)"):
     if bad in allow:
         allow.remove(bad)
 for rule in (f"Read(/{vault_root}/**)",
-             f"Write(/{vault_root}/**)",
              f"Edit(/{vault_root}/**)"):
     if rule not in allow:
         allow.append(rule)

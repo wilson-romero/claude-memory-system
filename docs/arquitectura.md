@@ -39,10 +39,44 @@ Regla de oro: **ownership disjunto**. El capture (determinista) y el curador (ag
 
 1. **SessionStart** → `memoria-load.sh` inyecta (~6KB): banner de máquina, `_project.md` del proyecto actual, última entrada de contexto-reciente, índice de agentes, índice de shared-knowledge. También: aviso de versión desactualizada y lanzamiento del Sueño si lleva >24h sin correr.
 2. **Trabajo normal** — Claude puede leer cualquier archivo del vault con Read.
-3. **Stop** → dos hooks:
-   - `memoria-capture.sh` (30s): nota de sesión, `_project.md`, daily, índices, banco de agentes. SIEMPRE corre.
-   - Curador (agente, 120s): destila contexto-reciente, lecciones, feedback a Memoria-CC. Salida temprana si la sesión fue trivial.
-4. **03:30** → `memoria-dream.timer` ejecuta el Sueño (ver abajo).
+3. **Stop** → dos hooks, **los dos en segundo plano** (desde v1.3.0 el turno se libera al instante):
+   - `memoria-capture.sh` — `"async": true`: nota de sesión, `_project.md`, daily, índices, banco de agentes. SIEMPRE corre. Nada decide sobre su salida, así que no hay razón para esperarlo.
+   - `memoria-curator.sh` — `"asyncRewake": true`: lanza el curador en `claude -p` headless (destila contexto-reciente, lecciones, feedback a Memoria-CC; salida temprana si la sesión fue trivial). **No puede ser un hook `agent`**: los hooks `agent` no aceptan `async` ni `asyncRewake`, y por eso cada turno pagaba hasta sus 120 s.
+4. **La garantía de que la memoria se escriba** — ver § *Hooks asíncronos sin fallo silencioso*.
+5. **03:30** → `memoria-dream.timer` ejecuta el Sueño (ver abajo).
+
+## Hooks asíncronos sin fallo silencioso
+
+Volver asíncronos los hooks del `Stop` mueve el riesgo: **un trabajo en segundo plano que falla en
+silencio deja de escribir memoria y nada se queja** — el mismo fallo del `.timer` verde que estuvo 43
+días sin hacer su trabajo. Tres piezas lo cubren, y ninguna confía en la anterior:
+
+1. **Se verifica el TRABAJO, no el intento.** `memoria-curator.sh` mide qué archivos de
+   `Memoria/`, `Lecciones/`, `Memoria-CC/` y `Decisiones/` cambiaron de `mtime` **después** de
+   arrancar la corrida. Solo si hay al menos uno escribe la marca fechada
+   `LAST_CURATOR_WRITE` y registra en el log **la lista de archivos**. El curador además debe
+   cerrar con una línea de contrato (`CURATOR: WROTE` / `CURATOR: SKIPPED`); decir `WROTE` sin
+   que ningún `mtime` se mueva **es un fallo**, no un éxito.
+2. **El aviso viaja de vuelta al modelo.** El hook es `asyncRewake`, así que **salir con código 2**
+   despierta la sesión con el motivo en un system-reminder. Si el curador salió bien, no dice nada.
+   El turno que provoca ese despertar llega con `stop_hook_active: true`, y ahí el script sale de
+   inmediato: sin esa guarda un fallo curaría en bucle, un `claude -p` por vuelta. Ojo —
+   `stop_hook_active` **no es solo nuestro**: cualquier notificación de tarea en segundo plano
+   despierta la sesión igual (medido el 2026-07-30). Por eso solo se salta **el despertar que
+   provocamos nosotros**, identificado por sesión y hora en `~/.claude/memoria-curator-rewake`;
+   los demás se curan con normalidad, o el último turno de esas sesiones se quedaría sin memoria.
+3. **Un contador que NO depende de los hooks asíncronos.** `memoria-load.sh` (SessionStart, y este
+   sí es síncrono) suma 1 a `SESSIONS_SINCE_CAPTURE` y `SESSIONS_SINCE_CURATOR` en cada sesión que
+   empieza; capture y curador **solo los ponen a 0 tras verificar su escritura**. A las
+   `MEMORIA_MISS_ALERT_AFTER` (5 por defecto) sesiones sin trabajo verificado, el banner de inicio
+   avisa con la fecha de la última escritura real. Si dejara de contar, desaparecería el banner de
+   contexto: un fallo **visible**, no silencioso.
+
+El curador headless corre con `--settings '{"disableAllHooks": true, permissions…}'`: sin eso su
+propio `Stop` volvería a lanzar el curador (recursión), y sin las reglas `Read()`/`Edit()` del vault
+un prompt de permiso en modo `-p` equivale a una denegación. Hay una segunda guarda de recursión por
+si `disableAllHooks` dejara de honrarse (`MEMORIA_CURATOR_ACTIVE`) y un `flock` que impide que dos
+curadores editen los mismos archivos curados a la vez.
 
 ## El Sueño (consolidación nocturna)
 
