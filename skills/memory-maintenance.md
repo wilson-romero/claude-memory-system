@@ -18,6 +18,21 @@ Run a health check of the second memory system and report in Spanish.
 
 5. **Dream**: check `grep ^LAST_DREAM= ~/.claude/memoria-state` and the latest report in `$MEMORIA_VAULT_ROOT/Memoria/Suenos/`. Flag if the last dream is older than 2 days. Verify the timer: `systemctl --user is-active memoria-dream.timer`.
 
+   A report existing is NOT proof the dream worked. **Phase 2 shells out to `claude -p`
+   headless**, so a dead model, an exhausted quota or a network blip leaves a Phase-1-only
+   report behind and nothing complains — the same silent-failure shape that hid a dead bisync
+   for 43 days. Check the last report actually reached Phase 2:
+
+   ```bash
+   LAST=$(ls -1t "$MEMORIA_VAULT_ROOT/Memoria/Suenos/"*.md 2>/dev/null | head -1)
+   systemctl --user show memoria-dream.service -p Result --value   # success?
+   grep -il "fase 2\|phase 2" "$LAST"                              # did it get there?
+   ```
+
+   Report the failure mode explicitly: *"the dream ran but only completed Phase 1 — the
+   consolidation did not happen"* is very different from *"the dream did not run"*. The first
+   one keeps producing reports and looks healthy.
+
 6. **Index integrity**: verify every `.md` file in `$MEMORIA_VAULT_ROOT/Memoria-CC/` (except MEMORY.md) has a line in MEMORY.md, and every line points to an existing file. Offer to fix discrepancies.
 
 7. **Cloud sync health** (only when `MEMORIA_SYNC=rclone`). A green `.timer` proves the
