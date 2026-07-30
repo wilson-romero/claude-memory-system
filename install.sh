@@ -36,6 +36,9 @@ run cp "$MACHINE_ENV" "$HOME/.claude/memoria.env"
 
 # shellcheck disable=SC1090
 source "$MACHINE_ENV"
+# Machine-local overrides that must NOT be versioned (peer IP/user/SSH port).
+# shellcheck disable=SC1091
+[ -f "$HOME/.claude/memoria.local.env" ] && source "$HOME/.claude/memoria.local.env"
 export MEMORIA_VAULT_ROOT MEMORIA_MACHINE MEMORIA_PROFILE
 export MEMORIA_REPO_DIR="$REPO_DIR"
 MEMORIA_STATE="$HOME/.claude/memoria-state"
@@ -199,6 +202,30 @@ if [ "${MEMORIA_SYNC:-none}" = "rclone" ]; then
   else
     say "systemd: user session not available — rclone sync timer not installed"
   fi
+fi
+
+# ── 7c. Knowledge union with the peer personal machine (MEMORIA_PEER set) ─────
+# Only Lecciones/, Memoria-CC/ and Decisiones/ travel, and only by union
+# (rsync --ignore-existing). The work machine leaves MEMORIA_PEER unset and so
+# stays isolated. See docs/arquitectura.md § Sincronización.
+if [ -n "${MEMORIA_PEER:-}" ] && [ -n "${MEMORIA_PEER_VAULT:-}" ]; then
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    say "systemd: installing sync-knowledge.{service,timer} (peer ${MEMORIA_PEER})"
+    run mkdir -p "$HOME/.config/systemd/user"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      sed "s|%h/Code/wilson-romero/claude-memory-system|${REPO_DIR}|" \
+        "${REPO_DIR}/scripts/systemd/sync-knowledge.service" \
+        > "$HOME/.config/systemd/user/sync-knowledge.service"
+      cp "${REPO_DIR}/scripts/systemd/sync-knowledge.timer" \
+        "$HOME/.config/systemd/user/sync-knowledge.timer"
+      systemctl --user daemon-reload
+      systemctl --user enable --now sync-knowledge.timer
+    fi
+  else
+    say "systemd: user session not available — knowledge union timer not installed"
+  fi
+else
+  say "knowledge union: MEMORIA_PEER not set — this machine stays isolated"
 fi
 
 # ── 8. Record installed version ───────────────────────────────────────────────

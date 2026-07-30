@@ -4,22 +4,34 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ VAULT (uno por máquina, nunca cruza)                            │
+│ VAULT (uno por máquina)                                         │
 │                                                                 │
+│ ── CONOCIMIENTO: compartido entre las máquinas PERSONALES ────  │
+│  Memoria-CC/         ← CURADOR + auto-memory nativo + SUEÑO     │
+│    MEMORY.md (índice, NO se comparte: es resumen curado)        │
+│    feedback_* project_* reference_*                             │
+│  Lecciones/          ← CURADOR   (_INDEX.md NO se comparte)     │
+│  Decisiones/         ← CURADOR   (_INDEX.md NO se comparte)     │
+│                                                                 │
+│ ── SESIÓN: por máquina, nunca cruza ─────────────────────────   │
 │  Memoria/            ← CURADOR (agente) + Wilson a mano         │
 │    contexto-reciente.md, proyectos-activos.md, personas.md,     │
 │    preferencias-jarvis.md, wilson-perfil.md                     │
 │    Archivo/          ← SUEÑO (archiva, nunca borra)             │
 │    Suenos/           ← SUEÑO (reportes nocturnos)               │
-│  Memoria-CC/         ← CURADOR + auto-memory nativo + SUEÑO     │
-│    MEMORY.md (índice) + feedback_* project_* reference_*        │
-│  Lecciones/          ← CURADOR                                  │
 │  projects/<slug>/    ← CAPTURE (script determinista) SOLAMENTE  │
 │  daily/              ← CAPTURE SOLAMENTE                        │
 │  agents/             ← CAPTURE SOLAMENTE                        │
 │  _index.md           ← CAPTURE SOLAMENTE                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**El conocimiento se comparte solo entre máquinas del mismo perfil de confidencialidad.** Las
+personales (`personal`) lo unen automáticamente; la de **trabajo** (`work`, BOGWROMEROCA)
+**nunca cruza nada** — no declara `MEMORIA_PEER`. La única vía para llevarle una lección es
+**promoverla** a mano con `/memory-promote`, que revisa, limpia datos de cliente y exige
+aprobación de commit. Es deliberado: impide que contenido de cliente salga de la máquina de
+trabajo por un automatismo.
 
 Regla de oro: **ownership disjunto**. El capture (determinista) y el curador (agente) nunca escriben en las mismas rutas → cero conflictos aunque corran en paralelo. El Sueño solo toca capas semánticas y jamás los datos crudos.
 
@@ -41,9 +53,33 @@ Regla de oro: **ownership disjunto**. El capture (determinista) y el curador (ag
 
 ## Sincronización
 
-- **Contenido del vault**: cada máquina con su nube (PC-WILSON: rclone bisync → Google Drive cada 15 min; BOGWROMEROCA: OneDrive vía symlink). El contenido nunca cruza máquinas.
-- **El sistema** (este repo): git privado en GitHub. `update.sh` = pull + migraciones + re-render.
-- **shared-knowledge/**: viaja con el repo; promoción solo manual con `/memory-promote` (revisión + scrub de datos de cliente + aprobación de commit).
+Hay **tres** mecanismos, y cada uno existe porque el contenido que mueve tiene una semántica distinta. Confundirlos borra datos.
+
+### 1. Vault ↔ nube (por máquina) — `sync-obsidian.sh`
+
+Cada máquina con su propia carpeta remota: `mark-PC` → `gdrive:Obsidian`, `PC-WILSON` → `gdrive:Obsidian-PC-WILSON`, `BOGWROMEROCA` → OneDrive vía symlink. **Nunca compartir una carpeta remota entre dos máquinas**: sus vaults no son intercambiables (`contexto-reciente.md` llegó a pesar 87 KB en una y 571 KB en otra, `projects/` 195 vs 522 archivos) y `--conflict-resolve newer` haría desaparecer un lado en silencio.
+
+### 2. Conocimiento ↔ máquina personal — `sync-knowledge.sh`
+
+`Lecciones/`, `Memoria-CC/` y `Decisiones/` **sí** se comparten entre las máquinas **personales**, porque el objetivo del sistema es que ese conocimiento esté disponible venga Claude Code de donde venga. Sin esto el conocimiento se parte: en julio de 2026, de 478 archivos entre `mark-PC` y `PC-WILSON`, **solo 1 coincidía**.
+
+Es **unión, no sincronización**: `rsync -a --ignore-existing` en ambos sentidos. Un archivo = una lección, se escribe una vez y casi no se edita, así que `--ignore-existing` **solo puede añadir — nunca sobrescribe ni borra**. Sin conflictos, sin baseline, sin `--resync`.
+
+`_INDEX.md` y `MEMORY.md` quedan **excluidos**: son resúmenes curados, no artefactos append-only; copiarlos a ciegas los estropea. Los fusiona el curador o el Sueño.
+
+Se activa solo en las máquinas que declaren `MEMORIA_PEER` / `MEMORIA_PEER_VAULT` en su `.env`. Si el peer está apagado —normal en equipos personales— registra y sale con 0. **BOGWROMEROCA (trabajo) no declara peer**, y así queda aislada.
+
+### 3. El sistema (este repo)
+
+Git privado en GitHub. `update.sh` = pull + migraciones + re-render. **`shared-knowledge/`** viaja con el repo; promoción solo manual con `/memory-promote` (revisión + scrub de datos de cliente + aprobación de commit) — es la vía para llevar una lección genérica **a la máquina de trabajo**, que no participa de la unión.
+
+### Regla para decidir el mecanismo
+
+| Contenido | Semántica | Herramienta |
+|---|---|---|
+| Append-only (una lección = un archivo) | **unión** | `rsync --ignore-existing` |
+| Curado y mutable (contexto, índices) | dueño único o fusión manual | nunca bisync compartido |
+| Estado local de la máquina | copia a su nube | `rclone bisync` con remoto propio |
 
 ## Versionado
 

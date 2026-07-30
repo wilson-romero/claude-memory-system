@@ -1,0 +1,7 @@
+[Unit]
+Description=Union de conocimiento entre las maquinas personales de Wilson
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/Code/wilson-romero/claude-memory-system/scripts/sync-knowledge.sh
