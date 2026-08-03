@@ -110,11 +110,15 @@ if ! err=$("$RCLONE_BIN" lsd "$REMOTE" --max-depth 1 --retries 1 \
         --low-level-retries 1 --timeout 20s 2>&1 >/dev/null); then
     fails=$((fails + 1))
     echo "$fails" > "$FAILS_FILE"
+    # Collapse the whole stderr onto one line rather than keeping its last one:
+    # Google's quota error wraps, and its last line is ", rateLimitExceeded" —
+    # true, and useless to whoever reads the log at 02:00.
+    why=$(echo "$err" | tr '\n' ' ' | tr -s ' ' | cut -c1-300)
     if [ "$fails" -lt "$FAIL_LIMIT" ]; then
-        log "OFFLINE (${fails}/${FAIL_LIMIT}): ${REMOTE} unreachable — $(echo "$err" | tail -1)"
+        log "OFFLINE (${fails}/${FAIL_LIMIT}): ${REMOTE} unreachable — ${why}"
         exit 0
     fi
-    log "FAILED: ${REMOTE} unreachable after ${fails} consecutive attempts — $(echo "$err" | tail -1)"
+    log "FAILED: ${REMOTE} unreachable after ${fails} consecutive attempts — ${why}"
     exit 1
 fi
 echo 0 > "$FAILS_FILE"
