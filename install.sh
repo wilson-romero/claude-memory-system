@@ -36,7 +36,9 @@ run cp "$MACHINE_ENV" "$HOME/.claude/memoria.env"
 
 # shellcheck disable=SC1090
 source "$MACHINE_ENV"
-# Machine-local overrides that must NOT be versioned (peer IP/user/SSH port).
+# Machine-local overrides that must NOT be versioned. This used to carry the
+# SSH peer (IP, user, port), retired in v1.5.0 by migrations/005 — a Drive
+# remote name is not sensitive, so it lives in config/machines/*.env instead.
 # shellcheck disable=SC1091
 [ -f "$HOME/.claude/memoria.local.env" ] && source "$HOME/.claude/memoria.local.env"
 export MEMORIA_VAULT_ROOT MEMORIA_MACHINE MEMORIA_PROFILE
@@ -238,13 +240,14 @@ if [ "${MEMORIA_SYNC:-none}" = "rclone" ]; then
   fi
 fi
 
-# ── 7c. Knowledge union with the peer personal machine (MEMORIA_PEER set) ─────
+# ── 7c. Knowledge union through the shared Drive hub ─────────────────────────
 # Only Lecciones/, Memoria-CC/ and Decisiones/ travel, and only by union
-# (rsync --ignore-existing). The work machine leaves MEMORIA_PEER unset and so
-# stays isolated. See docs/arquitectura.md § Sincronización.
-if [ -n "${MEMORIA_PEER:-}" ] && [ -n "${MEMORIA_PEER_VAULT:-}" ]; then
+# (rclone copy --ignore-existing). The work machine declares no
+# MEMORIA_KNOWLEDGE_REMOTE, and sync-knowledge.sh additionally refuses to run
+# under profile=work. See docs/arquitectura.md § Sincronización.
+if [ "${MEMORIA_PROFILE:-personal}" != "work" ] && [ -n "${MEMORIA_KNOWLEDGE_REMOTE:-}" ]; then
   if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
-    say "systemd: installing sync-knowledge.{service,timer} (peer ${MEMORIA_PEER})"
+    say "systemd: installing sync-knowledge.{service,timer} (hub ${MEMORIA_KNOWLEDGE_REMOTE})"
     run mkdir -p "$HOME/.config/systemd/user"
     if [ "$DRY_RUN" -eq 0 ]; then
       sed "s|%h/Code/wilson-romero/claude-memory-system|${REPO_DIR}|" \
@@ -259,7 +262,23 @@ if [ -n "${MEMORIA_PEER:-}" ] && [ -n "${MEMORIA_PEER_VAULT:-}" ]; then
     say "systemd: user session not available — knowledge union timer not installed"
   fi
 else
-  say "knowledge union: MEMORIA_PEER not set — this machine stays isolated"
+  # Tearing the units down is not optional. install.sh still sources
+  # memoria.local.env, so a machine that used the retired SSH peer would keep
+  # an enabled timer pointing at the rewritten script.
+  if [ "${MEMORIA_PROFILE:-personal}" = "work" ]; then
+    say "knowledge union: profile=work — this machine never joins it (use /memory-promote)"
+  else
+    say "knowledge union: MEMORIA_KNOWLEDGE_REMOTE not set — this machine stays isolated"
+  fi
+  if [ -f "$HOME/.config/systemd/user/sync-knowledge.timer" ]; then
+    say "systemd: removing the knowledge union timer left by an earlier install"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      systemctl --user disable --now sync-knowledge.timer 2>/dev/null || true
+      rm -f "$HOME/.config/systemd/user/sync-knowledge.timer" \
+            "$HOME/.config/systemd/user/sync-knowledge.service"
+      systemctl --user daemon-reload
+    fi
+  fi
 fi
 
 # ── 8. Record installed version ───────────────────────────────────────────────

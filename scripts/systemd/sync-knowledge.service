@@ -1,7 +1,9 @@
 [Unit]
-Description=Union de conocimiento entre las maquinas personales de Wilson
+Description=Union de conocimiento entre las maquinas personales (carpeta compartida de Drive)
 After=network-online.target
 
 [Service]
 Type=oneshot
+TimeoutStartSec=300
+Nice=10
 ExecStart=%h/Code/wilson-romero/claude-memory-system/scripts/sync-knowledge.sh

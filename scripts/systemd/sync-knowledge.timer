@@ -5,6 +5,10 @@ Description=Union de conocimiento cada 30 min
 OnBootSec=5min
 OnUnitActiveSec=30min
 Persistent=true
+# The union is commutative, so the order of the machines does not matter — but
+# both hitting the Drive API in the same second does. Google answers that with
+# a 403 "Queries per minute", measured while testing this change.
+RandomizedDelaySec=120
 
 [Install]
 WantedBy=timers.target
