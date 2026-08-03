@@ -14,8 +14,10 @@
 # bulk copy either way would have destroyed knowledge. This tool measures what
 # each side contributes and leaves the decision to a human.
 #
-# The `modified:` frontmatter line is ignored: it differs on every edited file
-# and says nothing about content.
+# Frontmatter bookkeeping is ignored. Measured on the real vault: `updated:`
+# (312 files) and `created:` (322) are MORE common than `modified:` (152), and
+# `machine:` differs between machines by design. Filtering only `modified:`
+# reported eight files as CONFLICTO whose whole difference was a date.
 set -uo pipefail
 
 MEMORIA_ENV="${MEMORIA_ENV:-$HOME/.claude/memoria.env}"
@@ -30,7 +32,10 @@ TMP=$(mktemp -d)
 trap "rm -rf '$TMP'" EXIT
 
 # Content lines only: drop the frontmatter timestamp and blank lines.
-strip() { grep -v '^  *modified:' "$1" 2>/dev/null | grep -v '^[[:space:]]*$' | sort; }
+strip() {
+    grep -vE '^[[:space:]]*(modified|updated|created|originSessionId|machine):' "$1" 2>/dev/null \
+        | grep -v '^[[:space:]]*$' | sort
+}
 
 n_local=0; n_hub=0; n_conflict=0
 echo "===== TRIAJE de divergencias con el hub ====="
