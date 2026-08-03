@@ -87,25 +87,46 @@ Run a health check of the second memory system and report in Spanish.
 
    If it is `no`, offer `loginctl enable-linger "$(id -un)"` (no sudo needed for one's own user).
 
-6d. **Divergence with the peer** (only when `MEMORIA_PEER` is set in `~/.claude/memoria.local.env`).
-   The union runs `rsync --ignore-existing`, which copies only files that are **missing**: it never
-   clobbers, and therefore **never propagates an improvement to a file that already exists on the
-   other side**. Counting files does not detect this — on 2026-07-29 both machines had the same
+6d. **Divergence with the hub** (only when `MEMORIA_KNOWLEDGE_REMOTE` is set).
+   The union runs `rclone copy --ignore-existing`, which copies only files that are **missing**: it
+   never clobbers, and therefore **never propagates an improvement to a file that already exists on
+   the other side**. Counting files does not detect this — on 2026-07-29 both machines had the same
    493 filenames with none exclusive to either, and **10 differed in content**. Compare md5:
 
    ```bash
    cd "$MEMORIA_VAULT_ROOT" && find Lecciones Memoria-CC Decisiones -name '*.md' \
      -exec md5sum {} + | sort -k2 > /tmp/local.md5
-   ssh -p "$MEMORIA_PEER_PORT" "$MEMORIA_PEER" 'cd "$MEMORIA_PEER_VAULT" && find Lecciones Memoria-CC Decisiones -name "*.md" -exec md5sum {} + | sort -k2' > /tmp/peer.md5
-   join -j2 -o 0,1.1,2.1 /tmp/local.md5 /tmp/peer.md5 | awk '$2!=$3{print $1}'
+   for d in Lecciones Memoria-CC Decisiones; do
+     rclone md5sum "$MEMORIA_KNOWLEDGE_REMOTE/$d" | sed "s|  |  $d/|"
+   done | sort -k2 > /tmp/hub.md5
+   join -j2 -o 0,1.1,2.1 /tmp/local.md5 /tmp/hub.md5 | awk '$2!=$3{print $1}'
    ```
 
+   **What this comparison can and cannot say.** It is local ↔ hub, not machine ↔ machine: a
+   divergence does **not** tell you which machine introduced it, and the hub may be carrying a third
+   version that neither machine has any more. Say so in the report instead of guessing.
+
    **Report the divergence, never resolve it in bulk.** The correct direction changes per file: on
-   2026-07-29 six files were better locally (filled-in frontmatter) but one was better on the peer
-   (146 lines vs 117 — it carried the correction that the local copy still denied). A blind
-   local→peer copy would have destroyed 34 good lines. For each divergent file, measure what each
+   2026-07-29 six files were better locally (filled-in frontmatter) but one was better on the other
+   side (146 lines vs 117 — it carried the correction that the local copy still denied). A blind
+   copy either way would have destroyed 34 good lines. For each divergent file, measure what each
    side contributes (`comm -23` / `comm -13` over its non-empty lines) and decide file by file.
-   `MEMORY*.md` and `_INDEX.md` are **per-machine and must diverge** — do not flag them.
+   `MEMORY*.md` (the index **and its branches**) and `_INDEX.md` are **per-machine and must
+   diverge** — they are excluded from the union, so do not flag them.
+
+6e. **Knowledge transport health** (only when `MEMORIA_KNOWLEDGE_REMOTE` is set). Same lesson as 7:
+   a green timer proves the schedule, not the work.
+
+   ```bash
+   systemctl --user is-active sync-knowledge.timer
+   systemctl --user is-failed sync-knowledge.service
+   grep -E "union (done|FAILED)" "$HOME/.local/log/sync-knowledge.log" | tail -1
+   cat "$HOME/.local/state/sync-knowledge.fails"   # consecutive unreachable runs
+   ```
+
+   Flag if the last `union done` is older than **1 day**. A non-zero fails counter that never
+   returns to 0 is the signature of an expired Drive token, as opposed to a laptop that keeps
+   going offline — the counter exists precisely to tell those two apart.
 
 7. **Cloud sync health** (only when `MEMORIA_SYNC=rclone`). A green `.timer` proves the
    schedule fires, NOT that the sync ran — check the `.service` and the log:

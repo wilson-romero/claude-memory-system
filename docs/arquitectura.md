@@ -4,11 +4,11 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ VAULT (uno por máquina)                                         │
+│ VAULT (uno por máquina — el vault y su remoto, NO el conocimiento)│
 │                                                                 │
 │ ── CONOCIMIENTO: compartido entre las máquinas PERSONALES ────  │
 │  Memoria-CC/         ← CURADOR + auto-memory nativo + SUEÑO     │
-│    MEMORY.md (índice, NO se comparte: es resumen curado)        │
+│    MEMORY*.md (índice y ramas, NO se comparten: son curados)    │
 │    feedback_* project_* reference_*                             │
 │  Lecciones/          ← CURADOR   (_INDEX.md NO se comparte)     │
 │  Decisiones/         ← CURADOR   (_INDEX.md NO se comparte)     │
@@ -28,7 +28,8 @@
 
 **El conocimiento se comparte solo entre máquinas del mismo perfil de confidencialidad.** Las
 personales (`personal`) lo unen automáticamente; la de **trabajo** (`work`, BOGWROMEROCA)
-**nunca cruza nada** — no declara `MEMORIA_PEER`. La única vía para llevarle una lección es
+**nunca cruza nada** — no declara `MEMORIA_KNOWLEDGE_REMOTE`, y además el script de unión se niega
+a correr bajo `MEMORIA_PROFILE=work`. La única vía para llevarle una lección es
 **promoverla** a mano con `/memory-promote`, que revisa, limpia datos de cliente y exige
 aprobación de commit. Es deliberado: impide que contenido de cliente salga de la máquina de
 trabajo por un automatismo.
@@ -91,15 +92,37 @@ Hay **tres** mecanismos, y cada uno existe porque el contenido que mueve tiene u
 
 ### 1. Vault ↔ nube (por máquina) — `sync-obsidian.sh`
 
-Cada máquina con su propia carpeta remota: `mark-PC` → `gdrive:Obsidian`, `PC-WILSON` → `gdrive:Obsidian-PC-WILSON`, `BOGWROMEROCA` → OneDrive vía symlink. **Nunca compartir una carpeta remota entre dos máquinas**: sus vaults no son intercambiables (`contexto-reciente.md` llegó a pesar 87 KB en una y 571 KB en otra, `projects/` 195 vs 522 archivos) y `--conflict-resolve newer` haría desaparecer un lado en silencio.
+Cada máquina con su propia carpeta remota: `mark-PC` → `gdrive:Obsidian`, `PC-WILSON` → `gdrive:Obsidian-PC-WILSON`, `BOGWROMEROCA` → OneDrive vía symlink (fuera de este sistema: `install.sh` no tiene rama para `onedrive`, así que ahí no se despliega ningún timer de vault). **Nunca compartir una carpeta remota de VAULT entre dos máquinas**: sus vaults no son intercambiables (`contexto-reciente.md` llegó a pesar 87 KB en una y 571 KB en otra, `projects/` 195 vs 522 archivos) y `--conflict-resolve newer` haría desaparecer un lado en silencio.
+
+> La carpeta del mecanismo 2 **sí** se comparte, y no contradice lo anterior: lleva solo
+> conocimiento append-only, se une con `copy --ignore-existing` (que no sobrescribe ni borra) y
+> no toca nada curado. Lo peligroso no es compartir: es compartir **con `bisync`** contenido que
+> tiene un dueño por máquina.
+
+Los conflictos de bisync se respaldan en `<remoto de la máquina>-sync-conflicts`. Antes iban todos a `gdrive:Obsidian-sync-conflicts`, así que dos máquinas podían pisarse la única copia de un fichero que bisync ya había borrado en local.
 
 ### 2. Conocimiento ↔ máquina personal — `sync-knowledge.sh`
 
 `Lecciones/`, `Memoria-CC/` y `Decisiones/` **sí** se comparten entre las máquinas **personales**, porque el objetivo del sistema es que ese conocimiento esté disponible venga Claude Code de donde venga. Sin esto el conocimiento se parte: en julio de 2026, de 478 archivos entre `mark-PC` y `PC-WILSON`, **solo 1 coincidía**.
 
-Es **unión, no sincronización**: `rsync -a --ignore-existing` en ambos sentidos. Un archivo = una lección, se escribe una vez y casi no se edita, así que `--ignore-existing` **solo puede añadir — nunca sobrescribe ni borra**. Sin conflictos, sin baseline, sin `--resync`.
+El transporte es un **hub**, no un peer: una única carpeta compartida en Drive
+(`MEMORIA_KNOWLEDGE_REMOTE`, hoy `gdrive:Claude-Knowledge`) contra la que cada máquina personal
+empuja y de la que baja. Ninguna máquina conoce a la otra. Antes era `rsync` sobre SSH directo al
+peer, que exigía **las dos encendidas a la vez**: de 87 ejecuciones registradas, **40 no hicieron
+nada** porque la otra estaba apagada. El hub quita esa condición y, de paso, es una copia off-site
+del conocimiento.
 
-`_INDEX.md` y `MEMORY.md` quedan **excluidos**: son resúmenes curados, no artefactos append-only; copiarlos a ciegas los estropea. Los fusiona el curador o el Sueño.
+El hub es **hermano** de los remotos de vault, nunca hijo: colgado de `gdrive:Obsidian/…`, el bisync
+del mecanismo 1 se lo bajaría dentro del vault y la siguiente unión volvería a subir la copia.
+`sync-knowledge.sh` se niega a correr en esa forma.
+
+Es **unión, no sincronización**: `rclone copy --ignore-existing` en ambos sentidos. Un archivo = una
+lección, se escribe una vez y casi no se edita, así que `--ignore-existing` **solo puede añadir —
+nunca sobrescribe ni borra**. Sin conflictos, sin baseline, sin `--resync`.
+
+`_INDEX.md` y `MEMORY*.md` quedan **excluidos**: son resúmenes curados —`MEMORY.md` y sus ramas
+`MEMORY-<tema>.md`—, no artefactos append-only; copiarlos a ciegas los estropea. Los fusiona el
+curador o el Sueño.
 
 > ⚠️ **El precio de `--ignore-existing`: la unión trae ficheros NUEVOS, no propaga MEJORAS.**
 > Editar una lección que ya existe en la otra máquina no viaja **nunca** — se queda anclada
@@ -112,7 +135,13 @@ Es **unión, no sincronización**: `rsync -a --ignore-existing` en ambos sentido
 > mejor en `PC-WILSON`** (146 líneas contra 117: llevaba la corrección que la copia local
 > todavía negaba). Una copia en bloque en cualquier sentido habría borrado conocimiento bueno.
 
-Se activa solo en las máquinas que declaren `MEMORIA_PEER` / `MEMORIA_PEER_VAULT` en su `.env`. Si el peer está apagado —normal en equipos personales— registra y sale con 0. **BOGWROMEROCA (trabajo) no declara peer**, y así queda aislada.
+> ⚠️ **Y borrar en local no borra en el hub**: el siguiente pull resucita el fichero. Retirar
+> conocimiento compartido es **vaciarlo y dejar lápida**, no borrarlo. Con el peer SSH pasaba
+> lo mismo; lo que cambia es que ahora hay un tercer sitio donde vive la copia.
+
+Se activa solo en las máquinas que declaren `MEMORIA_KNOWLEDGE_REMOTE` en su `config/machines/<host>.env`. Si el hub no responde —WiFi caído, portátil en el tren— registra `OFFLINE (n/3)` y sale con 0; a partir de `MEMORIA_KNOWLEDGE_FAIL_LIMIT` intentos seguidos sale con **1** y el servicio se pone rojo. Ese contador es lo que distingue "sin red un rato" de "el token de Drive caducó", que es la forma en que este sistema ya perdió 43 días en verde.
+
+**BOGWROMEROCA (trabajo) queda aislada por dos vías independientes**: no declara `MEMORIA_KNOWLEDGE_REMOTE`, y además `sync-knowledge.sh` **se niega a correr con `MEMORIA_PROFILE=work`** aunque alguien se lo configure por error. La configuración sola era la protección hasta v1.5.0, y una configuración está a una edición de estar mal.
 
 ### 3. El sistema (este repo)
 
@@ -122,7 +151,7 @@ Git privado en GitHub. `update.sh` = pull + migraciones + re-render. **`shared-k
 
 | Contenido | Semántica | Herramienta |
 |---|---|---|
-| Append-only (una lección = un archivo) | **unión** | `rsync --ignore-existing` |
+| Append-only (una lección = un archivo) | **unión** | `rclone copy --ignore-existing` a un hub compartido |
 | Curado y mutable (contexto, índices) | dueño único o fusión manual | nunca bisync compartido |
 | Estado local de la máquina | copia a su nube | `rclone bisync` con remoto propio |
 

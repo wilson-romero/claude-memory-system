@@ -1,6 +1,6 @@
 # claude-memory-system
 
-Sistema unificado de "segunda memoria" Obsidian para Claude Code, desplegado en los equipos de Wilson (PC-WILSON personal, BOGWROMEROCA trabajo). Los vaults son **separados por máquina** (confidencialidad); el **sistema es el mismo** y vive en este repo.
+Sistema unificado de "segunda memoria" Obsidian para Claude Code, desplegado en los equipos de Wilson (mark-PC y PC-WILSON personales, BOGWROMEROCA trabajo). Los vaults son **separados por máquina** (confidencialidad); el **sistema es el mismo** y vive en este repo.
 
 ## Instalación en una máquina nueva
 

@@ -5,7 +5,7 @@
 ```yaml
 ---
 type: feedback | project | reference | lesson | session | daily | curated | user
-machine: PC-WILSON | BOGWROMEROCA
+machine: mark-PC | PC-WILSON | BOGWROMEROCA
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 tags: []

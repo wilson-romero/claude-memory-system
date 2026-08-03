@@ -11,6 +11,10 @@
 - El script de captura guarda SIEMPRE: nota de sesión (`projects/<slug>/sessions/`), historial del proyecto, nota diaria (`daily/`), índices.
 - El curador (agente) destila: contexto reciente, lecciones técnicas, feedback. Si la sesión fue trivial, no escribe nada.
 
+**Cada 30 minutos (solo máquinas personales):**
+- El conocimiento (`Lecciones/`, `Memoria-CC/`, `Decisiones/`) viaja por una carpeta compartida de Drive, así que **no hace falta que la otra máquina esté encendida**.
+- Es una **unión**: solo añade. Editar una lección que ya existe al otro lado no viaja, y **borrarla en local no la borra del hub** — el siguiente ciclo la baja otra vez. Para retirar algo compartido: vaciarlo y dejar lápida.
+
 **Cada noche a las 03:30 (o al encender el equipo si estaba apagado):**
 - El Sueño repara enlaces, fusiona duplicados, archiva lo viejo y deja reporte en `Memoria/Suenos/YYYY-MM-DD.md`.
 
