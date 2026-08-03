@@ -4,6 +4,10 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-TimeoutStartSec=300
+# A steady-state union moves a handful of files in seconds, but the FIRST run
+# on a new machine seeds the whole hub, and Drive takes about a second per
+# file: 300s killed the seed at 173 of 584. The union is resumable
+# (--ignore-existing re-uploads nothing), so a generous bound costs nothing.
+TimeoutStartSec=1800
 Nice=10
 ExecStart=%h/Code/wilson-romero/claude-memory-system/scripts/sync-knowledge.sh

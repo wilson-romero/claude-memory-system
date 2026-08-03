@@ -125,6 +125,12 @@ echo 0 > "$FAILS_FILE"
 
 # --- The union -------------------------------------------------------------
 
+# Logged BEFORE any work: a run killed by systemd's TimeoutStartSec dies on
+# SIGTERM without reaching any of the lines below, so without this the union
+# log shows nothing at all and only systemd knows the run existed. Measured —
+# the first seed was killed at 173 of 584 files and left no trace here.
+log "starting union (${VAULT} <-> ${REMOTE})"
+
 failed=0
 pulled=0
 pushed=0
