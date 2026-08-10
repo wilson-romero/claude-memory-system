@@ -10,6 +10,12 @@
 set -uo pipefail
 trap 'exit 0' ERR
 
+# Kill switch: capture is skipped while this flag file exists. Remove the file
+# to re-enable it without touching this script.
+if [ -e "${HOME}/.claude/memoria-capture.off" ]; then
+    exit 0
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/common.sh"

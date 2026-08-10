@@ -19,6 +19,12 @@
 #     last verified write, a signal that does NOT depend on this script running.
 set -uo pipefail
 
+# Kill switch: curation is skipped while this flag file exists. Exit 0 (not 2)
+# so the disabled state never wakes the session. Remove the file to re-enable.
+if [ -e "${HOME}/.claude/memoria-capture.off" ]; then
+    exit 0
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/common.sh"
