@@ -100,8 +100,17 @@ CLAUDE_BIN=$(find_claude)
 
 # ── Single instance: two curators editing the same curated files would clash ──
 exec 9>"$LOCK_FILE"
-if ! flock -w 300 9; then
-  fail_loud "otro curador siguió ocupado 300s (lock ${LOCK_FILE})"
+# A curated run takes ~4-7 min (headless model call), so the wait has to outlast
+# one full run or a queued curator is guaranteed to give up while the holder is
+# still working normally. Measured 2026-09-14: 6 min 42 s for an 8-file run.
+#
+# Losing the race is NOT a failure: another curator holds the lock and is writing
+# the same files. It must exit quietly. fail_loud() writes $REWAKE_FILE, which
+# wakes the session, whose Stop hook spawns yet another curator, which queues
+# behind the same lock and loses again — a self-feeding loop that reached 9 live
+# processes on 2026-09-14 before being killed by hand.
+if ! flock -w 900 9; then
+  quiet_exit "skipped (another curator holds the lock after 900s; it curates the same files)"
 fi
 
 state_set LAST_CURATOR_RUN "$(date '+%Y-%m-%dT%H:%M:%S')"
