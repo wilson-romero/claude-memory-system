@@ -88,10 +88,34 @@ fi
 
 # 3. Sessions whose cwd is the vault itself are the maintenance ones (the dream,
 #    /memory-* skills). Capture skips them for the same reason.
-OBSIDIAN_TREE="$(dirname "$MEMORIA_VAULT_ROOT")"
-case "$CWD" in
+#    Both sides are resolved before comparing: MEMORIA_VAULT_ROOT is
+#    /home/mark/obsidian/ClaudeCode, a symlink into /mnt/c/Users/.../Obsidian,
+#    while Claude Code reports $CWD already resolved to the /mnt/c path. The
+#    prefix test could therefore never match, and on 2026-09-15 every dream got
+#    a curator anyway — the guard had been dead since the vault was symlinked.
+OBSIDIAN_TREE="$(realpath "$(dirname "$MEMORIA_VAULT_ROOT")" 2>/dev/null \
+                 || dirname "$MEMORIA_VAULT_ROOT")"
+CWD_REAL="$(realpath "$CWD" 2>/dev/null || echo "$CWD")"
+case "$CWD_REAL" in
   "$OBSIDIAN_TREE"*) quiet_exit "skipped (cwd inside vault tree: $CWD)" ;;
 esac
+
+# 4. Minimum gap per session. The Stop hook fires on EVERY turn, so a working
+#    session pays a full headless curation per turn. Measured 2026-09-15: six
+#    curators in twelve minutes produced 35 writes over 10 distinct files —
+#    MEMORY.md and contexto-reciente.md rewritten six times each with nearly the
+#    same content, 20% of the day's quota. Skipping here is safe: the capture
+#    hook has already written the session note, so the next curator of this
+#    session curates the whole accumulated stretch, not just its own turn.
+SESSION_GAP="${MEMORIA_CURATOR_MIN_GAP:-600}"
+SESSION_STAMP="$HOME/.claude/memoria-curator-last-${SESSION_ID:-unknown}"
+if [ "$SESSION_GAP" -gt 0 ] && [ -f "$SESSION_STAMP" ]; then
+  LAST_RUN=$(cat "$SESSION_STAMP" 2>/dev/null || echo 0)
+  AGE=$((START_EPOCH - ${LAST_RUN:-0}))
+  if [ "$AGE" -lt "$SESSION_GAP" ]; then
+    quiet_exit "skipped (this session was curated ${AGE}s ago; gap is ${SESSION_GAP}s)"
+  fi
+fi
 
 CLAUDE_BIN=$(find_claude)
 [ -z "$CLAUDE_BIN" ] && fail_loud "no se encontró el binario claude"
@@ -114,6 +138,9 @@ if ! flock -w 900 9; then
 fi
 
 state_set LAST_CURATOR_RUN "$(date '+%Y-%m-%dT%H:%M:%S')"
+# Stamped on start, not on finish: a curator that runs for six minutes must
+# already be holding off the turns that end while it works.
+echo "$START_EPOCH" > "$SESSION_STAMP" 2>/dev/null || true
 log "curator: start (session ${SESSION_ID:-unknown}, cwd ${CWD})"
 
 # ── Wait for the session note capture writes (both hooks are async now) ───────
