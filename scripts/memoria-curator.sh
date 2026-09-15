@@ -117,6 +117,25 @@ if [ "$SESSION_GAP" -gt 0 ] && [ -f "$SESSION_STAMP" ]; then
   fi
 fi
 
+# 5. Global gap — the ceiling. Guard 4 is per session, so N sessions working at
+#    once cost N curations per window and none of them breaks the rule; on
+#    2026-09-15 there were 25 live claude processes. This one counts for the
+#    whole machine, whatever session fired it, because all curators write the
+#    SAME vault: a curation 10 minutes old has already folded in the session
+#    notes the next one would read. Cost is quadratic in the agent's internal
+#    turns (measured: 35 turns -> 3.19M cache_read), so frequency is the only
+#    cheap lever. At 1800s the ceiling is 2 curations/hour, ~6.5M equivalent
+#    tokens over a 9h day, against the ~19M a 10-minute gap would allow.
+GLOBAL_GAP="${MEMORIA_CURATOR_GLOBAL_GAP:-1800}"
+GLOBAL_STAMP="$HOME/.claude/memoria-curator-last-any"
+if [ "$GLOBAL_GAP" -gt 0 ] && [ -f "$GLOBAL_STAMP" ]; then
+  LAST_ANY=$(cat "$GLOBAL_STAMP" 2>/dev/null || echo 0)
+  AGE_ANY=$((START_EPOCH - ${LAST_ANY:-0}))
+  if [ "$AGE_ANY" -lt "$GLOBAL_GAP" ]; then
+    quiet_exit "skipped (a curator ran ${AGE_ANY}s ago on this machine; global gap is ${GLOBAL_GAP}s)"
+  fi
+fi
+
 CLAUDE_BIN=$(find_claude)
 [ -z "$CLAUDE_BIN" ] && fail_loud "no se encontró el binario claude"
 [ -f "$CURATOR_PROMPT_FILE" ] && [ -s "$CURATOR_PROMPT_FILE" ] \
@@ -133,14 +152,21 @@ exec 9>"$LOCK_FILE"
 # wakes the session, whose Stop hook spawns yet another curator, which queues
 # behind the same lock and loses again — a self-feeding loop that reached 9 live
 # processes on 2026-09-14 before being killed by hand.
-if ! flock -w 900 9; then
-  quiet_exit "skipped (another curator holds the lock after 900s; it curates the same files)"
+#
+# -n, not -w 900: waiting serialised the curators but did not drop any of them.
+# The queued one woke up 15 minutes later and curated files the holder had just
+# written — MEMORY.md and contexto-reciente.md were each rewritten six times on
+# 2026-09-15 this way. Waiting was only safe to remove once losing the lock
+# stopped feeding the rewake loop (fixed in the previous commit).
+if ! flock -n 9; then
+  quiet_exit "skipped (another curator holds the lock and curates the same files)"
 fi
 
 state_set LAST_CURATOR_RUN "$(date '+%Y-%m-%dT%H:%M:%S')"
 # Stamped on start, not on finish: a curator that runs for six minutes must
 # already be holding off the turns that end while it works.
 echo "$START_EPOCH" > "$SESSION_STAMP" 2>/dev/null || true
+echo "$START_EPOCH" > "$GLOBAL_STAMP" 2>/dev/null || true
 log "curator: start (session ${SESSION_ID:-unknown}, cwd ${CWD})"
 
 # ── Wait for the session note capture writes (both hooks are async now) ───────
