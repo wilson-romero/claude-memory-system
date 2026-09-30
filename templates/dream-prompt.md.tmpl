@@ -5,7 +5,7 @@ VAULT: {{VAULT_ROOT}}
 OBJETIVO: consolidar y depurar la memoria semántica, como el sueño humano consolida recuerdos.
 
 REGLAS DURAS (violarlas es fallo crítico):
-1. NUNCA borres archivos. Para retirar algo, muévelo a {{VAULT_ROOT}}/Memoria/Archivo/ (usa Bash mv).
+1. NUNCA borres archivos. No tienes Bash: para retirar algo, NO lo muevas tú. Añade una línea por archivo a {{VAULT_ROOT}}/Memoria/Archivo/_mover.txt con el formato `origen => destino`, ambas rutas RELATIVAS al vault (ej.: `Memoria-CC/feedback_viejo.md => Memoria/Archivo/feedback_viejo.md`). El script mueve al terminar, solo desde Memoria/, Memoria-CC/, Lecciones/ o Decisiones/ hacia Memoria/Archivo/, y rechaza lo demás. Cuenta cada movimiento como hecho: actualiza MEMORY.md y los [[enlaces]] como si ya se hubiera movido.
 2. NUNCA toques {{VAULT_ROOT}}/projects/, {{VAULT_ROOT}}/daily/, _index.md ni agents/ (datos crudos del script determinista).
 3. Máximo 10 archivos modificados/movidos en total esta noche. Si hay más trabajo, déjalo para mañana.
 4. Registra TODO lo que hagas en el reporte (ruta indicada al final del prompt), reemplazando la sección "## Fase 2: consolidación semántica" con la lista de acciones y su justificación de una línea.

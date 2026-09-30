@@ -65,6 +65,41 @@ state_set() {
   fi
 }
 
+# Flags for a headless `claude -p` that may only WRITE inside the vault.
+# Fills the array HEADLESS_ARGS; run the child with the vault as its cwd.
+#
+# Its input (session transcripts, notes curated from them, the knowledge hub)
+# is untrusted: a web page or tool output quoted in a session can carry
+# instructions. A bare `--allowedTools Read,Write,Edit` approves those tools on
+# ANY path — measured on 2.1.285: a child asked to copy a file from outside the
+# vault into it did so with zero permission denials. So the child is boxed in:
+#   --restricted          ignores ~/.claude/settings.json (its defaultMode,
+#                         allow rules and hooks do not leak into the child)
+#   --strict-mcp-config   no MCP servers, hence no MCP write/fetch tools
+#   --tools               the only tools that exist; no Bash, no WebFetch
+#   dontAsk               anything not allowed below is denied, not asked
+#   Edit(/<vault>/**)     the only write permission (covers Write too)
+# Reads are allowed only in the working directories: the vault (cwd) plus any
+# --add-dir the caller passes. A Read() rule for a single file outside them was
+# NOT honoured in the same test, which is why the curator hands over a COPY of
+# the transcript in a private directory instead of a rule for its real path.
+vault_only_claude_args() {
+  local settings
+  settings=$(python3 - "$MEMORIA_VAULT_ROOT" <<'PYEOF'
+import json, sys
+vault = sys.argv[1]
+print(json.dumps({
+    "disableAllHooks": True,
+    "permissions": {"allow": [f"Edit(/{vault}/**)"]},
+}))
+PYEOF
+)
+  HEADLESS_ARGS=(--restricted --strict-mcp-config
+    --tools "Read,Edit,Write,Glob,Grep"
+    --permission-mode dontAsk
+    --settings "$settings")
+}
+
 # Locate the claude binary (not on PATH in non-interactive shells).
 find_claude() {
   if command -v claude >/dev/null 2>&1; then

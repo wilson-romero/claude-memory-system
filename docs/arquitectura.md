@@ -82,9 +82,20 @@ curadores editen los mismos archivos curados a la vez.
 ## El Sueño (consolidación nocturna)
 
 - **Fase 1** (determinista, sin tokens): repara enlaces `[[rotos]]` (solo correcciones inequívocas), detecta huérfanos y duplicados, pone en cuarentena archivos de conflicto de sync, audita MEMORY.md.
-- **Fase 2** (`claude -p` headless, modelo haiku): fusiona duplicados, compacta contexto-reciente (>30 días → `Archivo/contexto-YYYY-MM.md`), archiva lo obsoleto (NUNCA borra), enriquece el índice.
+- **Fase 2** (`claude -p` headless, `claude-sonnet-5`): fusiona duplicados, compacta contexto-reciente (>30 días → `Archivo/contexto-YYYY-MM.md`), archiva lo obsoleto (NUNCA borra), enriquece el índice. No tiene Bash: los archivados los **pide** en `Memoria/Archivo/_mover.txt` (`origen => destino`) y el script los aplica solo si van de una zona curada a `Memoria/Archivo/`.
 - Reporte auditable en `Memoria/Suenos/YYYY-MM-DD.md`. Máx 10 archivos por noche.
 - Solo corre si hubo actividad desde el último sueño.
+
+## Los procesos headless solo escriben en el vault
+
+El curador y la Fase 2 del Sueño trabajan sin nadie que apruebe nada y leen material **no confiable**: el transcript incluye páginas web y salidas de herramientas, que pueden traer instrucciones. Por eso los dos arrancan con `vault_only_claude_args` (`scripts/lib/common.sh`):
+
+- `--restricted` → el hijo **no hereda** `~/.claude/settings.json` (ni su `defaultMode`, ni sus reglas `allow`, ni sus hooks);
+- `--strict-mcp-config` y `--tools "Read,Edit,Write,Glob,Grep"` → sin MCP, sin Bash, sin WebFetch;
+- `--permission-mode dontAsk` + `Edit(/<vault>/**)` → solo escribe dentro del vault; el resto se deniega;
+- lee solo el vault (su cwd) y, en el curador, una **copia** del transcript en un directorio temporal pasado con `--add-dir`.
+
+Medido en 2.1.285: con el antiguo `--allowedTools "Read,Write,Edit,Glob,Grep"` el hijo copió un fichero de fuera del vault hacia dentro **sin ninguna denegación**; con estos flags `Read` y `Grep` quedan en `permission_denials`. Una regla `Read()` para un único fichero fuera del cwd **no** se respetó, y por eso el transcript va copiado y no por regla.
 
 ## Sincronización
 
@@ -145,7 +156,7 @@ Se activa solo en las máquinas que declaren `MEMORIA_KNOWLEDGE_REMOTE` en su `c
 
 ### 3. El sistema (este repo)
 
-Git privado en GitHub. `update.sh` = pull + migraciones + re-render. **`shared-knowledge/`** viaja con el repo; promoción solo manual con `/memory-promote` (revisión + scrub de datos de cliente + aprobación de commit) — es la vía para llevar una lección genérica **a la máquina de trabajo**, que no participa de la unión.
+Git en GitHub (repositorio **público**: aquí no va nada de cliente ni credenciales). `update.sh` = pull + migraciones + re-render. **`shared-knowledge/`** viaja con el repo; promoción solo manual con `/memory-promote` (revisión + scrub de datos de cliente + aprobación de commit) — es la vía para llevar una lección genérica **a la máquina de trabajo**, que no participa de la unión.
 
 ### Regla para decidir el mecanismo
 

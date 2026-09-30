@@ -126,7 +126,15 @@ done
 
 SRC_NOTE="${SESSION_NOTE:-(no disponible)}"
 SRC_TRANSCRIPT="(no disponible)"
-[ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ] && SRC_TRANSCRIPT="$TRANSCRIPT_PATH"
+# The child may read only the vault and the dirs passed with --add-dir. Handing
+# it ~/.claude/projects/<slug>/ would expose every other session of the
+# project, so it gets a COPY of this one transcript in a private directory.
+TRANSCRIPT_DIR=$(mktemp -d)
+trap 'rm -rf "$TRANSCRIPT_DIR"' EXIT
+if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ] \
+   && cp "$TRANSCRIPT_PATH" "${TRANSCRIPT_DIR}/transcript.jsonl"; then
+  SRC_TRANSCRIPT="${TRANSCRIPT_DIR}/transcript.jsonl"
+fi
 if [ "$SRC_NOTE" = "(no disponible)" ] && [ "$SRC_TRANSCRIPT" = "(no disponible)" ]; then
   fail_loud "no hay fuente de la sesión (ni nota de capture ni transcript)"
 fi
@@ -157,31 +165,19 @@ escrito se registra como fallo y despierta la sesión con el aviso.
 "
 
 # ── Run the curator headless ──────────────────────────────────────────────────
-# Two things travel in --settings:
-#   disableAllHooks — keeps this child from firing the Stop hooks again and
-#     curating in circles (verified: with the flag the hook does not run,
-#     without it it does).
-#   permissions.allow — the headless run has nobody to approve a prompt, and a
-#     prompt in -p mode is a denial. Carrying the vault rules here means the
-#     curator does not depend on ~/.claude/settings.json still having them.
-#     Only Edit()/Read() rules are honoured for file writes (a Write() rule is
-#     ignored with a warning), and absolute paths take the double-slash form.
-CHILD_SETTINGS=$(python3 - "$MEMORIA_VAULT_ROOT" <<'PYEOF'
-import json, sys
-vault = sys.argv[1]
-print(json.dumps({
-    "disableAllHooks": True,
-    "permissions": {"allow": [f"Read(/{vault}/**)", f"Edit(/{vault}/**)"]},
-}))
-PYEOF
-)
+# vault_only_claude_args (lib/common.sh) boxes the child in: writes only inside
+# the vault, reads only the vault and the transcript copy, no Bash, no MCP, and
+# none of ~/.claude/settings.json. Its --settings also carries disableAllHooks,
+# which keeps this child from firing the Stop hooks again and curating in
+# circles (verified: with the flag the hook does not run, without it it does).
+vault_only_claude_args
 OUT_FILE=$(mktemp)
 cd "$MEMORIA_VAULT_ROOT" || fail_loud "no se pudo entrar al vault ${MEMORIA_VAULT_ROOT}"
 MEMORIA_CURATOR_ACTIVE=1 timeout "$RUN_TIMEOUT" "$CLAUDE_BIN" -p "$PROMPT" \
   --model "$MODEL" \
-  --allowedTools "Read,Write,Edit,Glob,Grep" \
-  --settings "$CHILD_SETTINGS" \
-  >"$OUT_FILE" 2>&1
+  "${HEADLESS_ARGS[@]}" \
+  --add-dir "$TRANSCRIPT_DIR" \
+  </dev/null >"$OUT_FILE" 2>&1
 RC=$?
 { echo "--- curator output (session ${SESSION_ID:-unknown}, rc=${RC}) ---"; cat "$OUT_FILE"; } >> "$MEMORIA_LOG"
 
