@@ -95,6 +95,11 @@ El curador y la Fase 2 del Sueño trabajan sin nadie que apruebe nada y leen mat
 - `--permission-mode dontAsk` + `Edit(/<vault>/**)` → solo escribe dentro del vault; el resto se deniega;
 - lee solo el vault (su cwd) y, en el curador, una **copia** del transcript en un directorio temporal pasado con `--add-dir`.
 
+Dos defensas más cubren lo que el confinamiento no puede:
+
+- **Credenciales enmascaradas.** `scripts/lib/redact.py` tapa los formatos conocidos (Anthropic, OpenAI, GitHub, GitLab, AWS, Google, Slack, DigitalOcean, Stripe, JWT, claves privadas) antes de que el texto de la sesión llegue al vault: en las notas del capture y en la copia del transcript que lee el curador. Detecta **solo por prefijo de proveedor y forma exacta**; una heurística genérica ("parece aleatorio") marca prosa como secreto. `scripts/selftest-redact.py` prueba los dos lados: lo que debe tapar y lo que debe dejar intacto.
+- **La memoria se inyecta como datos.** El curador puede escribir en el vault una instrucción que venía en una página citada, y `memoria-load.sh` la inyectaría en sesiones que sí tienen todos los permisos. El bloque inyectado va precedido de un aviso: es referencia, no órdenes. **Es una mitigación, no una garantía**: un vault compartido por el hub de conocimiento puede traer texto escrito en otra máquina.
+
 Medido en 2.1.285: con el antiguo `--allowedTools "Read,Write,Edit,Glob,Grep"` el hijo copió un fichero de fuera del vault hacia dentro **sin ninguna denegación**; con estos flags `Read` y `Grep` quedan en `permission_denials`. Una regla `Read()` para un único fichero fuera del cwd **no** se respetó, y por eso el transcript va copiado y no por regla.
 
 ## Sincronización

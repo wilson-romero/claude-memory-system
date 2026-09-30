@@ -192,11 +192,14 @@ SRC_NOTE="${SESSION_NOTE:-(no disponible)}"
 SRC_TRANSCRIPT="(no disponible)"
 # The child may read only the vault and the dirs passed with --add-dir. Handing
 # it ~/.claude/projects/<slug>/ would expose every other session of the
-# project, so it gets a COPY of this one transcript in a private directory.
+# project, so it gets a COPY of this one transcript in a private directory —
+# with known credential formats masked (lib/redact.py), since what it reads
+# can end up in the cloud-synced vault.
 TRANSCRIPT_DIR=$(mktemp -d)
 trap 'rm -rf "$TRANSCRIPT_DIR"' EXIT
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ] \
-   && cp "$TRANSCRIPT_PATH" "${TRANSCRIPT_DIR}/transcript.jsonl"; then
+   && python3 "${SCRIPT_DIR}/lib/redact.py" < "$TRANSCRIPT_PATH" \
+        > "${TRANSCRIPT_DIR}/transcript.jsonl"; then
   SRC_TRANSCRIPT="${TRANSCRIPT_DIR}/transcript.jsonl"
 fi
 if [ "$SRC_NOTE" = "(no disponible)" ] && [ "$SRC_TRANSCRIPT" = "(no disponible)" ]; then
