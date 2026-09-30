@@ -38,8 +38,14 @@ detect() {
     echo "006: ${var}: ${#matches[@]} candidates for ${pattern} — left at default ${generic}"
     return
   fi
+  # memoria.env is sourced by every hook and the name ends up in the curator
+  # prompt: a vault file name like 'preferencias$(cmd).md' would run as code.
+  if ! [[ "${matches[0]}" =~ ^[A-Za-z0-9._-]+\.md$ ]]; then
+    echo "006: ${var}: unsafe file name ignored — left at default ${generic}"
+    return
+  fi
   [ -f "${ENV_FILE}.bak.006" ] || cp "$ENV_FILE" "${ENV_FILE}.bak.006"
-  printf '\n# Legacy curated file name detected by migrations/006 (default: %s)\n%s="%s"\n' \
+  printf '\n# Legacy curated file name detected by migrations/006 (default: %s)\n%s='\''%s'\''\n' \
     "$generic" "$var" "${matches[0]}" >> "$ENV_FILE"
   log "006: ${var}=${matches[0]}"
   echo "006: ${var}=\"${matches[0]}\" written to ${ENV_FILE}"
