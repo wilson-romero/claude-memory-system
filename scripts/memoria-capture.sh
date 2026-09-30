@@ -3,7 +3,7 @@
 # Reads session JSON from stdin, writes session/project/daily notes and
 # regenerates indexes in the Obsidian vault. Never blocks the session:
 # any failure exits 0.
-# Ported from BOGWROMEROCA's obsidian-sync.sh with fixes:
+# Ported from an earlier obsidian-sync.sh with fixes:
 #   - slug bug: ~/.claude/projects/ lookups now use cc_slug (leading dash)
 #   - atomic writes (tmp + mv) to avoid sync conflicts
 #   - per-machine config via ~/.claude/memoria.env

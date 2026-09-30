@@ -16,7 +16,7 @@ mkdir -p \
   "${MEMORIA_VAULT_ROOT}/agents/skills"
 
 render() {
-  sed "s|{{MACHINE}}|${MEMORIA_MACHINE}|g; s|{{TODAY}}|${TODAY}|g" "$1" > "$2"
+  sed "s|{{MACHINE}}|${MEMORIA_MACHINE}|g; s|{{TODAY}}|${TODAY}|g; s|{{USER}}|${MEMORIA_USER:-$(id -un)}|g" "$1" > "$2"
 }
 
 TPL="${MEMORIA_REPO_DIR}/templates/memoria-curada"
@@ -24,7 +24,7 @@ declare -A SEEDS=(
   ["contexto-reciente.md"]="contexto-reciente.md"
   ["proyectos-activos.md"]="proyectos-activos.md"
   ["personas.md"]="personas.md"
-  ["preferencias.md"]="preferencias-jarvis.md"
+  ["preferencias.md"]="preferencias.md"
 )
 for tpl in "${!SEEDS[@]}"; do
   dest="${MEMORIA_VAULT_ROOT}/Memoria/${SEEDS[$tpl]}"

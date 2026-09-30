@@ -5,7 +5,7 @@
 ```yaml
 ---
 type: feedback | project | reference | lesson | session | daily | curated | user
-machine: mark-PC | PC-WILSON | BOGWROMEROCA
+machine: <MEMORIA_MACHINE, por defecto el hostname>
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 tags: []
@@ -22,7 +22,7 @@ tags: []
 | `feedback_` | corrección de comportamiento o lección de debugging (problema → causa → solución) |
 | `project_` | trabajo de feature/bug con referencias a PRs y estado de validación |
 | `reference_` | runbooks, procedimientos reutilizables |
-| `user_` | contexto sobre Wilson |
+| `user_` | contexto sobre el usuario |
 
 ## MEMORY.md (índice de Memoria-CC)
 
@@ -32,8 +32,8 @@ tags: []
 
 ## Slugs
 
-- **vault_slug** (carpetas en `projects/` del vault): ruta sin slash inicial, `/` → `-`. Ej: `/home/mark/Code/Foo` → `home-mark-Code-Foo`.
-- **cc_slug** (carpetas de Claude Code en `~/.claude/projects/`): `/`, `.` y `_` → `-`, **conservando el guion inicial**. Ej: `/home/mark/Code/Foo.bar` → `-home-mark-Code-Foo-bar`.
+- **vault_slug** (carpetas en `projects/` del vault): ruta sin slash inicial, `/` → `-`. Ej: `/home/alice/Code/Foo` → `home-alice-Code-Foo`.
+- **cc_slug** (carpetas de Claude Code en `~/.claude/projects/`): `/`, `.` y `_` → `-`, **conservando el guion inicial**. Ej: `/home/alice/Code/Foo.bar` → `-home-alice-Code-Foo-bar`.
 - Nunca mezclar: los lookups en `~/.claude/projects/` usan `cc_slug`; las rutas del vault usan `vault_slug`.
 
 ## Enlaces
@@ -43,4 +43,4 @@ Wiki-style `[[archivo]]` o `[[ruta/archivo|alias]]`. Un `[[enlace]]` a un archiv
 ## Idiomas
 
 - Documentación, prompts y contenido de memoria: **español**.
-- Código, comentarios de código y mensajes de commit: **inglés** (commits con gitmoji, sin Co-Authored-By).
+- Código, comentarios de código y mensajes de commit: **inglés** (commits con [gitmoji](https://gitmoji.dev/)).

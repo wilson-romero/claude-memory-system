@@ -14,7 +14,9 @@ load_config() {
   : "${MEMORIA_VAULT_ROOT:?MEMORIA_VAULT_ROOT not set — run install.sh first}"
   MEMORIA_MACHINE="${MEMORIA_MACHINE:-$(hostname)}"
   MEMORIA_PROFILE="${MEMORIA_PROFILE:-personal}"
-  MEMORIA_REPO_DIR="${MEMORIA_REPO_DIR:-$HOME/Code/wilson-romero/claude-memory-system}"
+  # Default to wherever this checkout lives, so the repo can be cloned anywhere.
+  MEMORIA_REPO_DIR="${MEMORIA_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+  MEMORIA_SHARED_DIR="${MEMORIA_SHARED_DIR:-$HOME/.claude/shared-knowledge}"
   MEMORIA_LOG="${MEMORIA_LOG:-$HOME/.local/log/memoria-cc.log}"
   mkdir -p "$(dirname "$MEMORIA_LOG")"
 }
@@ -24,14 +26,14 @@ log() {
 }
 
 # Slug used INSIDE the vault (legacy remote convention, no leading dash):
-#   /home/mark/Code/Foo -> home-mark-Code-Foo
+#   /home/alice/Code/Foo -> home-alice-Code-Foo
 vault_slug() {
   echo "$1" | sed 's|^/||; s|/|-|g'
 }
 
 # Slug used by Claude Code for ~/.claude/projects/ (leading dash kept,
 # dots and underscores also become dashes):
-#   /home/mark/Code/Foo.bar -> -home-mark-Code-Foo-bar
+#   /home/alice/Code/Foo.bar -> -home-alice-Code-Foo-bar
 cc_slug() {
   echo "$1" | sed 's|[/._]|-|g'
 }
