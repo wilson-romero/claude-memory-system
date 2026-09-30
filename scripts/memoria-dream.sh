@@ -218,14 +218,80 @@ ${FINDINGS}
 ${REPORT}
 "
 
+# The child gets no Bash at all. It used to have Bash(mv:*) to retire files,
+# but a prefix rule cannot bound the DESTINATION: `mv <vault>/x.md ~/.bashrc`
+# matches it. Moves are REQUESTED in a manifest and applied below by
+# apply_dream_moves, which only accepts curated-zone → Memoria/Archivo/.
+MOVES_FILE="${ARCHIVE_DIR}/_mover.txt"
+rm -f "$MOVES_FILE"
+vault_only_claude_args
 cd "$MEMORIA_VAULT_ROOT"
 if timeout 600 "$CLAUDE_BIN" -p "$PROMPT" \
     --model claude-sonnet-5 \
-    --allowedTools "Read,Write,Edit,Glob,Grep,Bash(mv:*),Bash(ls:*)" \
-    >> "$MEMORIA_LOG" 2>&1; then
+    "${HEADLESS_ARGS[@]}" \
+    </dev/null >> "$MEMORIA_LOG" 2>&1; then
   log "dream: phase 2 done"
 else
   log "dream: phase 2 failed or timed out (will retry next night)"
+fi
+
+# ── Apply the moves phase 2 requested ─────────────────────────────────────────
+# Validation is the point: source must be a regular file (not a symlink) in a
+# curated zone, destination a new .md under Memoria/Archivo/, both resolved
+# without symlinks, at most 10 per night (the prompt's own limit).
+if [ -f "$MOVES_FILE" ]; then
+  MOVES_RESULT=$(python3 - "$MEMORIA_VAULT_ROOT" "$MOVES_FILE" <<'PYEOF'
+import os, sys
+vault = os.path.realpath(sys.argv[1])
+archive = os.path.join(vault, "Memoria", "Archivo")
+zones = ("Memoria", "Memoria-CC", "Lecciones", "Decisiones")
+done = 0
+
+def inside(path, root):
+    return os.path.commonpath([path, root]) == root
+
+for raw in open(sys.argv[2], encoding="utf-8"):
+    line = raw.strip()
+    if not line or line.startswith("#"):
+        continue
+    parts = line.split(" => ")
+    if len(parts) != 2:
+        print(f"REJECTED (formato): {line}")
+        continue
+    src_rel, dst_rel = (p.strip() for p in parts)
+    src = os.path.join(vault, src_rel)
+    dst = os.path.normpath(os.path.join(vault, dst_rel))
+    src_real = os.path.realpath(src)
+    reason = None
+    if done >= 10:
+        reason = "límite de 10 movimientos"
+    elif os.path.isabs(src_rel) or os.path.isabs(dst_rel):
+        reason = "ruta absoluta"
+    elif os.path.islink(src) or not os.path.isfile(src):
+        reason = "el origen no es un archivo regular"
+    elif not inside(src_real, vault) or os.path.relpath(src_real, vault).split(os.sep)[0] not in zones:
+        reason = "origen fuera de las zonas curadas"
+    elif inside(src_real, archive):
+        reason = "el origen ya está archivado"
+    elif not dst.endswith(".md") or not inside(dst, archive) or dst == archive:
+        reason = "destino fuera de Memoria/Archivo/"
+    elif not inside(os.path.realpath(os.path.dirname(dst)), archive):
+        reason = "el destino atraviesa un enlace simbólico"
+    elif os.path.lexists(dst):
+        reason = "el destino ya existe"
+    if reason:
+        print(f"REJECTED ({reason}): {line}")
+        continue
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    os.rename(src_real, dst)
+    done += 1
+    print(f"MOVED: {src_rel} => {os.path.relpath(dst, vault)}")
+PYEOF
+  )
+  rm -f "$MOVES_FILE"
+  while IFS= read -r line; do [ -n "$line" ] && log "dream: $line"; done <<< "$MOVES_RESULT"
+  printf '\n### Movimientos aplicados por el script\n\n```\n%s\n```\n' \
+    "${MOVES_RESULT:-(ninguno)}" >> "$REPORT"
 fi
 
 state_set LAST_DREAM "$TODAY"
