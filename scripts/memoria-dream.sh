@@ -227,7 +227,7 @@ rm -f "$MOVES_FILE"
 vault_only_claude_args
 cd "$MEMORIA_VAULT_ROOT"
 if timeout 600 "$CLAUDE_BIN" -p "$PROMPT" \
-    --model claude-sonnet-5 \
+    --model "${MEMORIA_DREAM_MODEL:-claude-sonnet-5}" \
     "${HEADLESS_ARGS[@]}" \
     </dev/null >> "$MEMORIA_LOG" 2>&1; then
   log "dream: phase 2 done"

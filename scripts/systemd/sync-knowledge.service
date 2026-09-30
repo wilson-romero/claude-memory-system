@@ -10,4 +10,4 @@ Type=oneshot
 # (--ignore-existing re-uploads nothing), so a generous bound costs nothing.
 TimeoutStartSec=1800
 Nice=10
-ExecStart=%h/Code/wilson-romero/claude-memory-system/scripts/sync-knowledge.sh
+ExecStart=@REPO_DIR@/scripts/sync-knowledge.sh

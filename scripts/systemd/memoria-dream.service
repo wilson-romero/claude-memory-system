@@ -3,6 +3,6 @@ Description=Nightly memory consolidation (dream) for Claude second memory
 
 [Service]
 Type=oneshot
-ExecStart=%h/Code/wilson-romero/claude-memory-system/scripts/memoria-dream.sh
+ExecStart=@REPO_DIR@/scripts/memoria-dream.sh
 TimeoutStartSec=900
 Nice=10
