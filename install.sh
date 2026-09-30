@@ -23,31 +23,52 @@ for dep in git python3; do
 done
 
 # ── 2. Per-machine config ─────────────────────────────────────────────────────
+# The config lives OUTSIDE the repo, in ~/.claude/memoria.env, so a plain clone
+# works for anyone. A fork that wants its machine configs versioned can still
+# keep config/machines/<hostname>.env: when present it wins and is copied over.
 HOST=$(hostname)
+USER_ENV="$HOME/.claude/memoria.env"
 MACHINE_ENV="${REPO_DIR}/config/machines/${HOST}.env"
-if [ ! -f "$MACHINE_ENV" ]; then
-  say "ERROR: no config for host '${HOST}'."
-  say "Create ${MACHINE_ENV} from config/memoria.env.example and re-run."
+if [ -f "$MACHINE_ENV" ]; then
+  say "config: ${MACHINE_ENV} → ${USER_ENV}"
+  run mkdir -p "$HOME/.claude"
+  run cp "$MACHINE_ENV" "$USER_ENV"
+elif [ -f "$USER_ENV" ]; then
+  MACHINE_ENV="$USER_ENV"
+  say "config: ${USER_ENV}"
+else
+  say "no config yet — writing ${USER_ENV} from config/memoria.env.example"
+  mkdir -p "$HOME/.claude"
+  cp "${REPO_DIR}/config/memoria.env.example" "$USER_ENV"
+  say "edit it (at least MEMORIA_VAULT_ROOT and MEMORIA_USER) and run install.sh again"
   exit 1
 fi
-say "config: ${MACHINE_ENV} → ~/.claude/memoria.env"
-run mkdir -p "$HOME/.claude"
-run cp "$MACHINE_ENV" "$HOME/.claude/memoria.env"
 
 # shellcheck disable=SC1090
 source "$MACHINE_ENV"
-# Machine-local overrides that must NOT be versioned. This used to carry the
-# SSH peer (IP, user, port), retired in v1.5.0 by migrations/005 — a Drive
-# remote name is not sensitive, so it lives in config/machines/*.env instead.
+# Optional machine-local overrides, kept apart from the main config (useful when
+# a fork versions config/machines/*.env). It used to carry the SSH peer,
+# retired in v1.5.0 by migrations/005.
 # shellcheck disable=SC1091
 [ -f "$HOME/.claude/memoria.local.env" ] && source "$HOME/.claude/memoria.local.env"
-export MEMORIA_VAULT_ROOT MEMORIA_MACHINE MEMORIA_PROFILE
+MEMORIA_MACHINE="${MEMORIA_MACHINE:-$HOST}"
+MEMORIA_PROFILE="${MEMORIA_PROFILE:-personal}"
+MEMORIA_USER="${MEMORIA_USER:-$(git config user.name 2>/dev/null || id -un)}"
+export MEMORIA_VAULT_ROOT MEMORIA_MACHINE MEMORIA_PROFILE MEMORIA_USER
 export MEMORIA_REPO_DIR="$REPO_DIR"
 MEMORIA_STATE="$HOME/.claude/memoria-state"
 
+# The memory lives in a folder INSIDE an Obsidian vault (e.g. <vault>/Claude).
+# That folder may be created here, the vault itself may not: a missing parent
+# is far more likely a typo in the config than a vault still to be made.
 if [ ! -d "$MEMORIA_VAULT_ROOT" ]; then
-  say "ERROR: vault not found at ${MEMORIA_VAULT_ROOT}"
-  exit 1
+  if [ -d "$(dirname "$MEMORIA_VAULT_ROOT")" ]; then
+    say "vault: creating ${MEMORIA_VAULT_ROOT}"
+    run mkdir -p "$MEMORIA_VAULT_ROOT"
+  else
+    say "ERROR: $(dirname "$MEMORIA_VAULT_ROOT") does not exist — check MEMORIA_VAULT_ROOT in ${MACHINE_ENV}"
+    exit 1
+  fi
 fi
 
 # ── 3. Pending migrations ─────────────────────────────────────────────────────
@@ -91,6 +112,7 @@ content = (content
     .replace("{{VAULT_ROOT}}", os.environ["MEMORIA_VAULT_ROOT"])
     .replace("{{MACHINE}}", os.environ["MEMORIA_MACHINE"])
     .replace("{{PROFILE}}", os.environ["MEMORIA_PROFILE"])
+    .replace("{{USER}}", os.environ["MEMORIA_USER"])
     .replace("{{CONFIDENTIALITY}}", os.environ.get("CONFIDENTIALITY", "")))
 with open(dest, "w") as f:
     f.write(content)
@@ -135,11 +157,9 @@ hooks = settings.setdefault("hooks", {})
 
 def is_ours(h):
     cmd = h.get("command", "")
-    prompt = h.get("prompt", "")
     return ("memoria-load.sh" in cmd or "memoria-capture.sh" in cmd
             or "memoria-curator.sh" in cmd
-            or "obsidian-load.sh" in cmd or "obsidian-sync.sh" in cmd
-            or "memoria persistente de Wilson" in prompt)
+            or "obsidian-load.sh" in cmd or "obsidian-sync.sh" in cmd)
 
 # SessionStart: our loader
 ss = [g for g in hooks.get("SessionStart", [])
@@ -193,8 +213,8 @@ fi
 # A --user timer only fires while the user manager is alive. Without linger that
 # manager dies with the login session, so a nightly 03:30 job simply never runs
 # on a machine nobody is logged into at 03:30 — enabled+active the whole time.
-# Both personal machines were in that state until 2026-07-29: the dream's reports
-# tracked login days, not nights.
+# Machines have been found in exactly that state: the dream's reports tracked
+# login days, not nights.
 if command -v loginctl >/dev/null 2>&1; then
   if [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" = "yes" ]; then
     say "systemd: linger already enabled (user timers survive logout)"
@@ -209,7 +229,7 @@ if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/d
   say "systemd: installing memoria-dream.{service,timer}"
   run mkdir -p "$HOME/.config/systemd/user"
   if [ "$DRY_RUN" -eq 0 ]; then
-    sed "s|%h/Code/wilson-romero/claude-memory-system|${REPO_DIR}|" \
+    sed "s|@REPO_DIR@|${REPO_DIR}|" \
       "${REPO_DIR}/scripts/systemd/memoria-dream.service" \
       > "$HOME/.config/systemd/user/memoria-dream.service"
     cp "${REPO_DIR}/scripts/systemd/memoria-dream.timer" \
@@ -227,7 +247,7 @@ if [ "${MEMORIA_SYNC:-none}" = "rclone" ]; then
     say "systemd: installing obsidian-sync.{service,timer} (rclone bisync)"
     run mkdir -p "$HOME/.config/systemd/user"
     if [ "$DRY_RUN" -eq 0 ]; then
-      sed "s|%h/Code/wilson-romero/claude-memory-system|${REPO_DIR}|" \
+      sed "s|@REPO_DIR@|${REPO_DIR}|" \
         "${REPO_DIR}/scripts/systemd/obsidian-sync.service" \
         > "$HOME/.config/systemd/user/obsidian-sync.service"
       cp "${REPO_DIR}/scripts/systemd/obsidian-sync.timer" \
@@ -250,7 +270,7 @@ if [ "${MEMORIA_PROFILE:-personal}" != "work" ] && [ -n "${MEMORIA_KNOWLEDGE_REM
     say "systemd: installing sync-knowledge.{service,timer} (hub ${MEMORIA_KNOWLEDGE_REMOTE})"
     run mkdir -p "$HOME/.config/systemd/user"
     if [ "$DRY_RUN" -eq 0 ]; then
-      sed "s|%h/Code/wilson-romero/claude-memory-system|${REPO_DIR}|" \
+      sed "s|@REPO_DIR@|${REPO_DIR}|" \
         "${REPO_DIR}/scripts/systemd/sync-knowledge.service" \
         > "$HOME/.config/systemd/user/sync-knowledge.service"
       cp "${REPO_DIR}/scripts/systemd/sync-knowledge.timer" \

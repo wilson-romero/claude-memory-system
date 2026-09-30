@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bidirectional sync between the local Obsidian vault and a cloud remote (rclone).
-# Only used on machines with MEMORIA_SYNC=rclone (e.g. PC-WILSON → Google Drive).
+# Only used on machines with MEMORIA_SYNC=rclone (e.g. a laptop → Google Drive).
 #
 # Conflict policy (prevents *.conflict1/2 files piling up in the vault):
 #   --conflict-resolve newer  → the newer file wins and keeps the canonical name

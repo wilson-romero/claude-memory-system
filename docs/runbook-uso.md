@@ -11,7 +11,7 @@
 - El script de captura guarda SIEMPRE: nota de sesión (`projects/<slug>/sessions/`), historial del proyecto, nota diaria (`daily/`), índices.
 - El curador (agente) destila: contexto reciente, lecciones técnicas, feedback. Si la sesión fue trivial, no escribe nada.
 
-**Cada 30 minutos (solo máquinas personales):**
+**Cada 30 minutos (solo si `MEMORIA_KNOWLEDGE_REMOTE` está configurado):**
 - El conocimiento (`Lecciones/`, `Memoria-CC/`, `Decisiones/`) viaja por una carpeta compartida de Drive, así que **no hace falta que la otra máquina esté encendida**.
 - Es una **unión**: solo añade. Editar una lección que ya existe al otro lado no viaja, y **borrarla en local no la borra del hub** — el siguiente ciclo la baja otra vez. Para retirar algo compartido: vaciarlo y dejar lápida.
 
@@ -24,7 +24,7 @@
 |---|---|
 | `/memory-load` | Carga la memoria completa (perfil, preferencias, proyectos, contexto) y muestra resumen |
 | `/memory-save [foco]` | Guardado manual dirigido (ej: `/memory-save la decisión sobre el API`) |
-| `/memory-promote <lección>` | Comparte una lección genérica con el otro equipo (revisa, limpia datos de cliente, pide aprobación) |
+| `/memory-promote <lección>` | Lleva una lección genérica a `MEMORIA_SHARED_DIR`, para máquinas fuera de la unión (revisa, limpia datos de cliente, pide aprobación) |
 | `/memory-maintenance` | Chequeo de salud: conflictos, staleness, versión, sueño, integridad del índice |
 | `/memory-update` | Actualiza el sistema a la última versión del repo |
 
