@@ -87,6 +87,12 @@ for mig in "${REPO_DIR}/migrations/"[0-9]*.sh; do
   fi
 done
 
+# Migrations may add keys to memoria.env (e.g. 006: legacy curated file names);
+# re-read it so the prompts rendered below see them.
+# shellcheck disable=SC1090
+[ "$DRY_RUN" -eq 0 ] && source "$USER_ENV"
+export MEMORIA_PREFS_FILE MEMORIA_PERFIL_FILE
+
 # ── 4. Skills → ~/.claude/commands/ ───────────────────────────────────────────
 run mkdir -p "$HOME/.claude/commands"
 for skill in "${REPO_DIR}/skills/"*.md; do
@@ -113,6 +119,8 @@ content = (content
     .replace("{{MACHINE}}", os.environ["MEMORIA_MACHINE"])
     .replace("{{PROFILE}}", os.environ["MEMORIA_PROFILE"])
     .replace("{{USER}}", os.environ["MEMORIA_USER"])
+    .replace("{{PREFS_FILE}}", os.environ.get("MEMORIA_PREFS_FILE") or "preferencias.md")
+    .replace("{{PERFIL_FILE}}", os.environ.get("MEMORIA_PERFIL_FILE") or "perfil.md")
     .replace("{{CONFIDENTIALITY}}", os.environ.get("CONFIDENTIALITY", "")))
 with open(dest, "w") as f:
     f.write(content)
