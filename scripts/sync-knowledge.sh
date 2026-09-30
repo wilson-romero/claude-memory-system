@@ -49,11 +49,12 @@ VAULT_REMOTE="${MEMORIA_SYNC_REMOTE:-}"
 LOG="${MEMORIA_KNOWLEDGE_LOG:-$HOME/.local/log/sync-knowledge.log}"
 FAILS_FILE="${MEMORIA_KNOWLEDGE_FAILS:-$HOME/.local/state/sync-knowledge.fails}"
 FAIL_LIMIT="${MEMORIA_KNOWLEDGE_FAIL_LIMIT:-3}"
-LOCK_FILE="${MEMORIA_KNOWLEDGE_LOCK:-/tmp/sync-knowledge.lock}"
+# Per-user runtime dir, not /tmp (see sync-obsidian.sh).
+LOCK_FILE="${MEMORIA_KNOWLEDGE_LOCK:-${XDG_RUNTIME_DIR:-$HOME/.local/state}/sync-knowledge.lock}"
 FOLDERS=(Lecciones Memoria-CC Decisiones)
 EXCLUDES=(--exclude "_INDEX.md" --exclude "MEMORY*.md")
 
-mkdir -p "$(dirname "$LOG")" "$(dirname "$FAILS_FILE")"
+mkdir -p "$(dirname "$LOG")" "$(dirname "$FAILS_FILE")" "$(dirname "$LOCK_FILE")"
 log() { echo "[$(date -Iseconds)] $*" >> "$LOG"; }
 
 # --- Guards, cheapest first ------------------------------------------------
