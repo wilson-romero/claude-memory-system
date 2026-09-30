@@ -28,6 +28,20 @@ REPORT="${REPORT_DIR}/${TODAY}.md"
 ARCHIVE_DIR="${MEMORIA_VAULT_ROOT}/Memoria/Archivo"
 mkdir -p "$REPORT_DIR" "$ARCHIVE_DIR/conflictos"
 
+# ── Single instance ───────────────────────────────────────────────────────────
+# The "already ran today" test below is a check-then-act, not a guard. On
+# 2026-09-15 four dreams read "no report yet" within the same four seconds
+# (08:22:54 - 08:25:59), all four passed it, and all four paid for phase 2:
+# 49% of the day's token quota spent four times on the same consolidation.
+# Losing this race is the normal outcome, not a failure — another dream is
+# doing exactly this work — so it exits 0 without waiting.
+DREAM_LOCK="$HOME/.claude/memoria-dream.lock"
+exec 8>"$DREAM_LOCK"
+if ! flock -n 8; then
+  log "dream: another dream already holds the lock, skipping"
+  exit 0
+fi
+
 # ── Skip if no activity since last dream (unless --force) ─────────────────────
 LAST_DREAM=$(state_get LAST_DREAM)
 if [ "$FORCE" -eq 0 ] && [ -n "$LAST_DREAM" ]; then
@@ -42,6 +56,11 @@ if [ -f "$REPORT" ] && [ "$FORCE" -eq 0 ]; then
   log "dream: already ran today (${REPORT}), skipping"
   exit 0
 fi
+
+# Claimed BEFORE the work, not after it. memoria-load.sh (SessionStart) launches
+# a dream whenever LAST_DREAM is not today; while the stamp waited for phase 2 to
+# finish, every session opened in those ~10 minutes launched one more.
+state_set LAST_DREAM "$TODAY"
 
 log "dream: starting (phase 1)"
 
@@ -222,11 +241,17 @@ ${REPORT}
 # but a prefix rule cannot bound the DESTINATION: `mv <vault>/x.md ~/.bashrc`
 # matches it. Moves are REQUESTED in a manifest and applied below by
 # apply_dream_moves, which only accepts curated-zone → Memoria/Archivo/.
+#
+# vault_only_claude_args also carries disableAllHooks: without it this child
+# fires the Stop hook when it finishes and spawns a full curator of its own. On
+# 2026-09-15 that turned four dreams into four extra curators (20% of the quota)
+# curating a session that was itself a memory job. MEMORIA_CURATOR_ACTIVE is the
+# second belt, read by the curator's recursion guard.
 MOVES_FILE="${ARCHIVE_DIR}/_mover.txt"
 rm -f "$MOVES_FILE"
 vault_only_claude_args
 cd "$MEMORIA_VAULT_ROOT"
-if timeout 600 "$CLAUDE_BIN" -p "$PROMPT" \
+if MEMORIA_CURATOR_ACTIVE=1 timeout 600 "$CLAUDE_BIN" -p "$PROMPT" \
     --model "${MEMORIA_DREAM_MODEL:-claude-sonnet-5}" \
     "${HEADLESS_ARGS[@]}" \
     </dev/null >> "$MEMORIA_LOG" 2>&1; then

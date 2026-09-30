@@ -73,9 +73,11 @@ mkdir -p "${SESSION_DIR}" "${VAULT_ROOT}/daily" "${AGENTS_DIR}"
 # ── Parse transcript JSONL ────────────────────────────────────────────────────
 PARSE_RESULT=""
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-  PARSE_RESULT=$(python3 - "$TRANSCRIPT_PATH" <<'PYEOF'
+  PARSE_RESULT=$(python3 - "$TRANSCRIPT_PATH" "${SCRIPT_DIR}/lib" <<'PYEOF'
 import sys, json
 from collections import Counter
+sys.path.insert(0, sys.argv[2])
+from redact import redact  # credentials never reach the (cloud-synced) vault
 
 transcript_path = sys.argv[1]
 user_msgs = []
@@ -106,11 +108,11 @@ try:
                         if isinstance(block, dict) and block.get("type") == "tool_result":
                             continue
                         if isinstance(block, str):
-                            user_msgs.append(block[:300])
+                            user_msgs.append(redact(block)[:300])
                         elif isinstance(block, dict) and block.get("type") == "text":
-                            user_msgs.append(block.get("text", "")[:300])
+                            user_msgs.append(redact(block.get("text", ""))[:300])
                 elif isinstance(content, str):
-                    user_msgs.append(content[:300])
+                    user_msgs.append(redact(content)[:300])
 
             elif role == "assistant":
                 if isinstance(content, list):
@@ -118,7 +120,7 @@ try:
                         if not isinstance(block, dict):
                             continue
                         if block.get("type") == "text":
-                            t = block.get("text", "")
+                            t = redact(block.get("text", ""))
                             if t.strip():
                                 assistant_messages.append(t)
                                 assistant_final = t
