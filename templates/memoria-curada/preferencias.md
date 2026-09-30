@@ -8,8 +8,9 @@ tags: [memoria, preferencias]
 
 # Preferencias de trabajo
 
-Preferencias y correcciones de comportamiento expresadas por Wilson.
+Preferencias y correcciones de comportamiento expresadas por {{USER}}.
 
+<!-- Ejemplos del tipo de entrada que el curador añade aquí:
 - Respuestas en español; código y comentarios en inglés.
-- Mensajes de commit en inglés con gitmoji, sin Co-Authored-By.
-- Nunca commit/push sin aprobación explícita de Wilson.
+- Nunca hacer commit/push sin aprobación explícita.
+-->

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# sync-knowledge.sh — keep the KNOWLEDGE folders identical across Wilson's
-# personal machines (mark-PC and PC-WILSON), without merging their vaults.
+# sync-knowledge.sh — keep the KNOWLEDGE folders identical across the user's
+# personal machines, without merging their vaults.
 #
 # Topology: hub-and-spoke, not peer-to-peer. Every personal machine pushes to
 # and pulls from ONE shared Drive folder (MEMORIA_KNOWLEDGE_REMOTE); no machine
@@ -9,14 +9,14 @@
 # recorded runs did nothing because the other machine was off. A hub removes
 # that requirement entirely, and doubles as an off-site copy of the knowledge.
 #
-# Why the hub is a SIBLING of the vault remotes, never a child: gdrive:Obsidian
-# and gdrive:Obsidian-PC-WILSON are bisynced whole. A hub under either of them
+# Why the hub is a SIBLING of the vault remotes, never a child: each machine's
+# vault remote (e.g. gdrive:Obsidian-laptop) is bisynced whole. A hub under either of them
 # would be pulled back down INSIDE the vault, and the next union would push the
 # copy up again. The nesting assertion below refuses to run in that shape.
 #
 # Why not point both machines at one shared VAULT remote instead: their session
-# state legitimately differs (Memoria/contexto-reciente.md is 571 KB on one and
-# 87 KB on the other, projects/ is 522 vs 195 files). Bisync with
+# state legitimately differs (Memoria/contexto-reciente.md was measured at 571 KB
+# on one machine and 87 KB on another, projects/ at 522 vs 195 files). Bisync with
 # --conflict-resolve newer would silently drop one side's curated files.
 #
 # Knowledge is different: one file = one lesson/reference, written once and
@@ -38,8 +38,7 @@ MEMORIA_ENV="${MEMORIA_ENV:-$HOME/.claude/memoria.env}"
 # shellcheck disable=SC1090
 [ -f "$MEMORIA_ENV" ] && source "$MEMORIA_ENV"
 # Kept for local overrides. The SSH peer that used to live here was retired in
-# v1.5.0 (migrations/005); a remote name is not sensitive, so the knowledge
-# config is versioned in config/machines/*.env like everything else.
+# v1.5.0 (migrations/005); the knowledge remote now lives in memoria.env.
 # shellcheck disable=SC1090
 [ -f "$HOME/.claude/memoria.local.env" ] && source "$HOME/.claude/memoria.local.env"
 

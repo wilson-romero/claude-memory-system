@@ -27,7 +27,7 @@ V_SLUG=$(vault_slug "$CWD")
 PROJECT_NOTE="${MEMORIA_VAULT_ROOT}/projects/${V_SLUG}/_project.md"
 CONTEXTO="${MEMORIA_VAULT_ROOT}/Memoria/contexto-reciente.md"
 AGENTS_INDEX="${MEMORIA_VAULT_ROOT}/agents/_skills-index.md"
-SHARED_INDEX="${MEMORIA_REPO_DIR}/shared-knowledge/INDEX.md"
+SHARED_INDEX="${MEMORIA_SHARED_DIR}/INDEX.md"
 
 # ── Version check (once a day, silent on network failure) ─────────────────────
 VERSION_WARNING=""

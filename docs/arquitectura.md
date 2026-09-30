@@ -14,9 +14,9 @@
 │  Decisiones/         ← CURADOR   (_INDEX.md NO se comparte)     │
 │                                                                 │
 │ ── SESIÓN: por máquina, nunca cruza ─────────────────────────   │
-│  Memoria/            ← CURADOR (agente) + Wilson a mano         │
+│  Memoria/            ← CURADOR (agente) + el usuario a mano     │
 │    contexto-reciente.md, proyectos-activos.md, personas.md,     │
-│    preferencias-jarvis.md, wilson-perfil.md                     │
+│    preferencias.md, perfil.md                                   │
 │    Archivo/          ← SUEÑO (archiva, nunca borra)             │
 │    Suenos/           ← SUEÑO (reportes nocturnos)               │
 │  projects/<slug>/    ← CAPTURE (script determinista) SOLAMENTE  │
@@ -27,7 +27,7 @@
 ```
 
 **El conocimiento se comparte solo entre máquinas del mismo perfil de confidencialidad.** Las
-personales (`personal`) lo unen automáticamente; la de **trabajo** (`work`, BOGWROMEROCA)
+personales (`personal`) lo unen automáticamente; la de **trabajo** (`work`)
 **nunca cruza nada** — no declara `MEMORIA_KNOWLEDGE_REMOTE`, y además el script de unión se niega
 a correr bajo `MEMORIA_PROFILE=work`. La única vía para llevarle una lección es
 **promoverla** a mano con `/memory-promote`, que revisa, limpia datos de cliente y exige
@@ -103,7 +103,7 @@ Hay **tres** mecanismos, y cada uno existe porque el contenido que mueve tiene u
 
 ### 1. Vault ↔ nube (por máquina) — `sync-obsidian.sh`
 
-Cada máquina con su propia carpeta remota: `mark-PC` → `gdrive:Obsidian`, `PC-WILSON` → `gdrive:Obsidian-PC-WILSON`, `BOGWROMEROCA` → OneDrive vía symlink (fuera de este sistema: `install.sh` no tiene rama para `onedrive`, así que ahí no se despliega ningún timer de vault). **Nunca compartir una carpeta remota de VAULT entre dos máquinas**: sus vaults no son intercambiables (`contexto-reciente.md` llegó a pesar 87 KB en una y 571 KB en otra, `projects/` 195 vs 522 archivos) y `--conflict-resolve newer` haría desaparecer un lado en silencio.
+Cada máquina con su propia carpeta remota (`MEMORIA_SYNC_REMOTE`, p. ej. `gdrive:Obsidian-portatil` y `gdrive:Obsidian-sobremesa`). Una máquina cuyo vault ya sincroniza otra herramienta (OneDrive, Obsidian Sync…) declara `MEMORIA_SYNC=onedrive` o `none` y queda fuera: `install.sh` no le despliega timer de vault. **Nunca compartir una carpeta remota de VAULT entre dos máquinas**: sus vaults no son intercambiables (`contexto-reciente.md` llegó a pesar 87 KB en una y 571 KB en otra, `projects/` 195 vs 522 archivos) y `--conflict-resolve newer` haría desaparecer un lado en silencio.
 
 > La carpeta del mecanismo 2 **sí** se comparte, y no contradice lo anterior: lleva solo
 > conocimiento append-only, se une con `copy --ignore-existing` (que no sobrescribe ni borra) y
@@ -114,10 +114,10 @@ Los conflictos de bisync se respaldan en `<remoto de la máquina>-sync-conflicts
 
 ### 2. Conocimiento ↔ máquina personal — `sync-knowledge.sh`
 
-`Lecciones/`, `Memoria-CC/` y `Decisiones/` **sí** se comparten entre las máquinas **personales**, porque el objetivo del sistema es que ese conocimiento esté disponible venga Claude Code de donde venga. Sin esto el conocimiento se parte: en julio de 2026, de 478 archivos entre `mark-PC` y `PC-WILSON`, **solo 1 coincidía**.
+`Lecciones/`, `Memoria-CC/` y `Decisiones/` **sí** se comparten entre las máquinas **personales**, porque el objetivo del sistema es que ese conocimiento esté disponible venga Claude Code de donde venga. Sin esto el conocimiento se parte: en julio de 2026, de 478 archivos entre dos máquinas, **solo 1 coincidía**.
 
 El transporte es un **hub**, no un peer: una única carpeta compartida en Drive
-(`MEMORIA_KNOWLEDGE_REMOTE`, hoy `gdrive:Claude-Knowledge`) contra la que cada máquina personal
+(`MEMORIA_KNOWLEDGE_REMOTE`, p. ej. `gdrive:Claude-Knowledge`) contra la que cada máquina personal
 empuja y de la que baja. Ninguna máquina conoce a la otra. Antes era `rsync` sobre SSH directo al
 peer, que exigía **las dos encendidas a la vez**: de 87 ejecuciones registradas, **40 no hicieron
 nada** porque la otra estaba apagada. El hub quita esa condición y, de paso, es una copia off-site
@@ -142,21 +142,24 @@ curador o el Sueño.
 > verde; la comprobación válida es **md5 por fichero** (la hace `/memory-maintenance`).
 >
 > Al reconciliar, **la dirección correcta cambia por fichero** y por eso `sync-knowledge.sh`
-> **reporta pero no resuelve**: ese día 6 ficheros estaban mejor en `mark-PC` y **1 estaba
-> mejor en `PC-WILSON`** (146 líneas contra 117: llevaba la corrección que la copia local
+> **reporta pero no resuelve**: ese día 6 ficheros estaban mejor en una máquina y **1 estaba
+> mejor en la otra** (146 líneas contra 117: llevaba la corrección que la copia local
 > todavía negaba). Una copia en bloque en cualquier sentido habría borrado conocimiento bueno.
 
 > ⚠️ **Y borrar en local no borra en el hub**: el siguiente pull resucita el fichero. Retirar
 > conocimiento compartido es **vaciarlo y dejar lápida**, no borrarlo. Con el peer SSH pasaba
 > lo mismo; lo que cambia es que ahora hay un tercer sitio donde vive la copia.
 
-Se activa solo en las máquinas que declaren `MEMORIA_KNOWLEDGE_REMOTE` en su `config/machines/<host>.env`. Si el hub no responde —WiFi caído, portátil en el tren— registra `OFFLINE (n/3)` y sale con 0; a partir de `MEMORIA_KNOWLEDGE_FAIL_LIMIT` intentos seguidos sale con **1** y el servicio se pone rojo. Ese contador es lo que distingue "sin red un rato" de "el token de Drive caducó", que es la forma en que este sistema ya perdió 43 días en verde.
+Se activa solo en las máquinas que declaren `MEMORIA_KNOWLEDGE_REMOTE` en su `~/.claude/memoria.env`. Si el hub no responde —WiFi caído, portátil en el tren— registra `OFFLINE (n/3)` y sale con 0; a partir de `MEMORIA_KNOWLEDGE_FAIL_LIMIT` intentos seguidos sale con **1** y el servicio se pone rojo. Ese contador es lo que distingue "sin red un rato" de "el token de Drive caducó", que es la forma en que este sistema ya perdió 43 días en verde.
 
-**BOGWROMEROCA (trabajo) queda aislada por dos vías independientes**: no declara `MEMORIA_KNOWLEDGE_REMOTE`, y además `sync-knowledge.sh` **se niega a correr con `MEMORIA_PROFILE=work`** aunque alguien se lo configure por error. La configuración sola era la protección hasta v1.5.0, y una configuración está a una edición de estar mal.
+**Una máquina de trabajo queda aislada por dos vías independientes**: no declara `MEMORIA_KNOWLEDGE_REMOTE`, y además `sync-knowledge.sh` **se niega a correr con `MEMORIA_PROFILE=work`** aunque alguien se lo configure por error. La configuración sola era la protección hasta v1.5.0, y una configuración está a una edición de estar mal.
 
 ### 3. El sistema (este repo)
 
-Git en GitHub (repositorio **público**: aquí no va nada de cliente ni credenciales). `update.sh` = pull + migraciones + re-render. **`shared-knowledge/`** viaja con el repo; promoción solo manual con `/memory-promote` (revisión + scrub de datos de cliente + aprobación de commit) — es la vía para llevar una lección genérica **a la máquina de trabajo**, que no participa de la unión.
+Repositorio público y **genérico**: no lleva la configuración ni la memoria de nadie. `update.sh` = pull + migraciones + re-render. Lo propio de cada usuario vive fuera del repo:
+
+- la configuración, en `~/.claude/memoria.env` (la crea `install.sh` desde `config/memoria.env.example`);
+- el conocimiento promovido, en `MEMORIA_SHARED_DIR` (por defecto `~/.claude/shared-knowledge`), cuyo `INDEX.md` se inyecta en cada sesión. `/memory-promote` escribe ahí tras revisar y limpiar datos de cliente; es la vía para llevar una lección genérica **a la máquina de trabajo**, que no participa de la unión. Si esa carpeta es un repo git privado del usuario, la promoción propone además el commit.
 
 ### Regla para decidir el mecanismo
 
