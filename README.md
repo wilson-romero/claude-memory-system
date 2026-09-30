@@ -39,7 +39,7 @@ Comandos: `/memory-load`, `/memory-save`, `/memory-promote`, `/memory-maintenanc
 
 El curador y el Sueño son procesos `claude -p` sin nadie que apruebe sus acciones, y leen material no confiable: el transcript de la sesión cita páginas web y salidas de herramientas. Por eso arrancan sin tus settings de usuario, sin Bash, sin MCP y sin WebFetch, y **solo pueden escribir dentro del vault**. El detalle, con la medición que lo justifica, está en [docs/arquitectura.md](docs/arquitectura.md#los-procesos-headless-solo-escriben-en-el-vault).
 
-Aun así, tu memoria contiene lo que hablas con Claude. Si sincronizas el vault con una nube, esa nube guarda tus conversaciones destiladas.
+Antes de escribir en el vault se enmascaran los formatos de credencial conocidos (tokens de GitHub, claves de Anthropic, OpenAI, AWS…), y la memoria se inyecta en cada sesión marcada como datos, no como instrucciones. Son mitigaciones: tu memoria sigue conteniendo lo que hablas con Claude, y si sincronizas el vault con una nube, esa nube guarda tus conversaciones destiladas. No pegues secretos en el chat.
 
 ## Documentación
 

@@ -21,9 +21,11 @@ set -euo pipefail
 VAULT_LOCAL="${MEMORIA_SYNC_LOCAL:-$(dirname "${MEMORIA_VAULT_ROOT:-$HOME/vault/Claude}")}"
 VAULT_REMOTE="${MEMORIA_SYNC_REMOTE:-gdrive:Obsidian}"
 LOG_FILE="${MEMORIA_SYNC_LOG:-$HOME/.local/log/obsidian-sync.log}"
-LOCK_FILE="/tmp/obsidian-sync.lock"
+# Per-user runtime dir, not /tmp: another local user could pre-create a /tmp
+# lock and keep this sync from ever starting.
+LOCK_FILE="${XDG_RUNTIME_DIR:-$HOME/.local/state}/obsidian-sync.lock"
 
-mkdir -p "$(dirname "$LOG_FILE")"
+mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$LOCK_FILE")"
 
 # shellcheck source=lib/sync-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib/sync-common.sh"
